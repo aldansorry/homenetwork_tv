@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:archive/archive.dart';
+import 'settings_service.dart';
 
 class AudioService {
-  static const String backendUrl = 'http://localhost:3000/provide/audio';
 
   static bool get isWeb => false;
 
@@ -25,8 +25,10 @@ class AudioService {
 
   static Future<bool> downloadAndExtractAudio() async {
     try {
-      print('Downloading audio from $backendUrl...');
-      final response = await http.get(Uri.parse(backendUrl)).timeout(
+      final backendUrl = await SettingsService.getBackendUrl();
+      final audioUrl = '$backendUrl/provide/audio';
+      print('Downloading audio from $audioUrl...');
+      final response = await http.get(Uri.parse(audioUrl)).timeout(
         const Duration(seconds: 30),
         onTimeout: () => throw Exception('Request timeout - Backend server tidak merespons'),
       );

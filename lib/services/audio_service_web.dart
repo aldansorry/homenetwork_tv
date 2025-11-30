@@ -5,13 +5,13 @@ import 'package:idb_shim/idb.dart' as idb;
 import 'package:idb_shim/idb_browser.dart';
 import 'package:http/http.dart' as http;
 import 'package:archive/archive.dart';
+import 'settings_service.dart';
 
 // IndexedDB constants
 const String _dbName = 'homenetwork_audio_db';
 const String _storeName = 'audioFiles';
 
 class AudioService {
-  static const String backendUrl = 'http://localhost:3000/provide/audio';
 
   static List<String> _webAudioFiles = [];
   static Map<String, Uint8List> _webAudioData = {};
@@ -34,8 +34,10 @@ class AudioService {
 
   static Future<bool> downloadAndExtractAudio() async {
     try {
-      print('Downloading audio from $backendUrl (web)...');
-      final response = await http.get(Uri.parse(backendUrl)).timeout(
+      final backendUrl = await SettingsService.getBackendUrl();
+      final audioUrl = '$backendUrl/provide/audio';
+      print('Downloading audio from $audioUrl (web)...');
+      final response = await http.get(Uri.parse(audioUrl)).timeout(
         const Duration(seconds: 30),
         onTimeout: () => throw Exception('Request timeout - Backend server tidak merespons'),
       );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
-import 'movie_page.dart';
+import 'movie_list_page.dart';
 import 'music_player_page.dart';
 import 'settings_page.dart';
 
@@ -16,7 +16,7 @@ class _MainMenuState extends State<MainMenu> {
 
   final List<Widget> _pages = const [
     HomePage(),
-    MoviePage(),
+    MovieListPage(),
     MusicPlayerPage(),
     SettingsPage(),
   ];

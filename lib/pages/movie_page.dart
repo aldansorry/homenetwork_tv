@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:video_player/video_player.dart';
+import '../services/settings_service.dart';
 
 class Movie {
   final String uuid;
@@ -27,7 +28,9 @@ class Movie {
 }
 
 class MoviePage extends StatefulWidget {
-  const MoviePage({super.key});
+  final String movieUuid;
+
+  const MoviePage({super.key, required this.movieUuid});
 
   @override
   State<MoviePage> createState() => _MoviePageState();
@@ -61,8 +64,9 @@ class _MoviePageState extends State<MoviePage> {
     });
 
     try {
+      final backendUrl = await SettingsService.getBackendUrl();
       final response = await http
-          .get(Uri.parse('http://localhost:3000/movie/list'))
+          .get(Uri.parse('$backendUrl/movie/${widget.movieUuid}/list'))
           .timeout(
             const Duration(seconds: 10),
             onTimeout: () => throw Exception('Request timeout'),
@@ -142,7 +146,9 @@ class _MoviePageState extends State<MoviePage> {
     });
 
     final movie = movies[index];
-    final streamUrl = 'http://localhost:3000/movie/stream/${movie.uuid}';
+    final backendUrl = await SettingsService.getBackendUrl();
+    final streamUrl =
+        '$backendUrl/movie/${widget.movieUuid}/stream/${movie.uuid}';
 
     try {
       _videoController = VideoPlayerController.networkUrl(Uri.parse(streamUrl));

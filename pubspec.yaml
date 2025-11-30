@@ -17,6 +17,7 @@ dependencies:
   archive: ^3.6.0
   idb_shim: ^2.2.0
   video_player: ^2.8.2
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
