@@ -6,10 +6,11 @@ import 'package:idb_shim/idb_browser.dart';
 import 'package:http/http.dart' as http;
 import 'package:archive/archive.dart';
 import 'settings_service.dart';
+import '../constants/app_constants.dart';
 
 // IndexedDB constants
-const String _dbName = 'homenetwork_audio_db';
-const String _storeName = 'audioFiles';
+const String _dbName = AppConstants.indexedDbName;
+const String _storeName = AppConstants.indexedDbStoreName;
 
 class AudioService {
 
@@ -35,10 +36,10 @@ class AudioService {
   static Future<bool> downloadAndExtractAudio() async {
     try {
       final backendUrl = await SettingsService.getBackendUrl();
-      final audioUrl = '$backendUrl/provide/audio';
+      final audioUrl = '$backendUrl${AppConstants.apiEndpointProvideAudio}';
       print('Downloading audio from $audioUrl (web)...');
       final response = await http.get(Uri.parse(audioUrl)).timeout(
-        const Duration(seconds: 30),
+        AppConstants.audioDownloadTimeout,
         onTimeout: () => throw Exception('Request timeout - Backend server tidak merespons'),
       );
 
@@ -69,7 +70,7 @@ class AudioService {
       for (final file in archive) {
         if (!file.isFile) continue;
         final extension = file.name.split('.').last.toLowerCase();
-        if (['mp3', 'm4a', 'webm', 'weba', 'wav', 'ogg'].contains(extension)) {
+        if (AppConstants.supportedAudioFormats.contains(extension)) {
           final content = file.content as List<int>;
           final u8 = Uint8List.fromList(content);
           _webAudioFiles.add(file.name);

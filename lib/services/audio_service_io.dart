@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:archive/archive.dart';
 import 'settings_service.dart';
+import '../constants/app_constants.dart';
 
 class AudioService {
 
@@ -26,10 +27,10 @@ class AudioService {
   static Future<bool> downloadAndExtractAudio() async {
     try {
       final backendUrl = await SettingsService.getBackendUrl();
-      final audioUrl = '$backendUrl/provide/audio';
+      final audioUrl = '$backendUrl${AppConstants.apiEndpointProvideAudio}';
       print('Downloading audio from $audioUrl...');
       final response = await http.get(Uri.parse(audioUrl)).timeout(
-        const Duration(seconds: 30),
+        AppConstants.audioDownloadTimeout,
         onTimeout: () => throw Exception('Request timeout - Backend server tidak merespons'),
       );
 
@@ -81,7 +82,7 @@ class AudioService {
       await for (var entity in dir.list(recursive: true, followLinks: false)) {
         if (entity is File) {
           final extension = entity.path.split('.').last.toLowerCase();
-          if (['mp3', 'm4a', 'webm', 'weba', 'wav', 'ogg'].contains(extension)) {
+          if (AppConstants.supportedAudioFormats.contains(extension)) {
             audioFiles.add(entity.path);
           }
         }
@@ -104,7 +105,7 @@ class AudioService {
       await for (var entity in dir.list(recursive: true)) {
         if (entity is File) {
           final extension = entity.path.split('.').last.toLowerCase();
-          if (['mp3', 'm4a', 'webm', 'weba', 'wav', 'ogg'].contains(extension)) {
+          if (AppConstants.supportedAudioFormats.contains(extension)) {
             return true;
           }
         }
@@ -127,7 +128,7 @@ class AudioService {
       await for (var entity in dir.list(recursive: true)) {
         if (entity is File) {
           final extension = entity.path.split('.').last.toLowerCase();
-          if (['mp3', 'm4a', 'webm', 'weba', 'wav', 'ogg'].contains(extension)) {
+          if (AppConstants.supportedAudioFormats.contains(extension)) {
             await entity.delete();
             print('Deleted: ${entity.path}');
           }

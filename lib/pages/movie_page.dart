@@ -1,189 +1,173 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:video_player/video_player.dart';
 import '../services/settings_service.dart';
+import '../models/movie_model.dart';
+import '../constants/app_constants.dart';
+import '../utils/api_response_parser.dart';
+import '../utils/date_time_utils.dart';
 
-class Movie {
-  final String uuid;
-  final String title;
-  final String? thumbnail;
-  final String? description;
-
-  Movie({
-    required this.uuid,
-    required this.title,
-    this.thumbnail,
-    this.description,
-  });
-
-  factory Movie.fromJson(Map<String, dynamic> json) {
-    return Movie(
-      uuid: json['uuid'] ?? json['id'] ?? '',
-      title: json['title'] ?? json['name'] ?? 'Unknown',
-      thumbnail: json['thumbnail'] ?? json['poster'] ?? json['image'],
-      description: json['description'] ?? json['desc'],
-    );
-  }
-}
-
+/// Page for playing movies/episodes from a series
 class MoviePage extends StatefulWidget {
-  final String movieUuid;
+  final String movieSeriesUuid;
 
-  const MoviePage({super.key, required this.movieUuid});
+  const MoviePage({super.key, required this.movieSeriesUuid});
 
   @override
   State<MoviePage> createState() => _MoviePageState();
 }
 
 class _MoviePageState extends State<MoviePage> {
-  List<Movie> movies = [];
-  int currentIndex = 0;
-  bool isLoading = false;
-  bool isAutoPlay = false;
-  double _volume = 1.0;
+  List<MovieModel> _movieList = [];
+  int _currentMovieIndex = 0;
+  bool _isLoadingMovies = false;
+  bool _isAutoPlayEnabled = false;
+  double _volumeLevel = AppConstants.defaultVolume;
   VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
   bool _isVideoPlaying = false;
+  bool _isFullscreen = false;
+  bool _showFullscreenControls = true;
+  Timer? _fullscreenControlsTimer;
 
   @override
   void initState() {
     super.initState();
-    loadMovies();
+    _loadMovieList();
   }
 
   @override
   void dispose() {
+    // Cancel timer
+    _fullscreenControlsTimer?.cancel();
+    // Reset system UI when disposing
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _videoController?.dispose();
     super.dispose();
   }
 
-  Future<void> loadMovies() async {
+  /// Load list of movies/episodes from API
+  Future<void> _loadMovieList() async {
+    if (!mounted) return;
+
     setState(() {
-      isLoading = true;
+      _isLoadingMovies = true;
     });
 
     try {
       final backendUrl = await SettingsService.getBackendUrl();
+      final apiUrl =
+          '$backendUrl${AppConstants.apiEndpointMovie}/${widget.movieSeriesUuid}${AppConstants.apiEndpointMovieList}';
+
       final response = await http
-          .get(Uri.parse('$backendUrl/movie/${widget.movieUuid}/list'))
+          .get(Uri.parse(apiUrl))
           .timeout(
-            const Duration(seconds: 10),
+            AppConstants.networkTimeout,
             onTimeout: () => throw Exception('Request timeout'),
           );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
+        final responseData = ApiResponseParser.parseJson(response.body);
+        if (responseData != null) {
+          final parsedMovies = ApiResponseParser.parseListResponse<MovieModel>(
+            responseData: responseData,
+            fromJson: MovieModel.fromJson,
+          );
 
-        // Check if status is success
-        if (responseData['status'] == 'success' &&
-            responseData['data'] != null) {
-          final List<dynamic> data = responseData['data'];
-          final List<Movie> loadedMovies = data
-              .map((json) => Movie.fromJson(json))
-              .toList();
-
-          if (mounted) {
+          if (parsedMovies != null && mounted) {
             setState(() {
-              movies = loadedMovies;
-              isLoading = false;
+              _movieList = parsedMovies;
+              _isLoadingMovies = false;
             });
 
             // Load first video if available
-            if (loadedMovies.isNotEmpty) {
-              loadVideo(0);
+            if (parsedMovies.isNotEmpty) {
+              _loadVideo(0);
             }
-          }
-        } else {
-          if (mounted) {
-            setState(() {
-              isLoading = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Failed to load movies: Invalid response format'),
-                backgroundColor: Colors.red,
-              ),
-            );
+            return;
           }
         }
-      } else {
-        if (mounted) {
-          setState(() {
-            isLoading = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to load movies: ${response.statusCode}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
       }
-    } catch (e) {
-      print('Error loading movies: $e');
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+
+      _handleError('Failed to load movies: ${response.statusCode}');
+    } catch (error) {
+      _handleError('Error loading movies: $error');
     }
   }
 
-  Future<void> loadVideo(int index) async {
-    if (index < 0 || index >= movies.length) return;
+  /// Handle errors with user feedback
+  void _handleError(String errorMessage) {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingMovies = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+    );
+  }
+
+  /// Load and initialize video player for selected movie
+  Future<void> _loadVideo(int movieIndex) async {
+    if (movieIndex < 0 || movieIndex >= _movieList.length) return;
 
     // Dispose previous controller
     await _videoController?.dispose();
 
+    if (!mounted) return;
+
     setState(() {
-      currentIndex = index;
+      _currentMovieIndex = movieIndex;
       _isVideoInitialized = false;
       _isVideoPlaying = false;
     });
 
-    final movie = movies[index];
+    final selectedMovie = _movieList[movieIndex];
     final backendUrl = await SettingsService.getBackendUrl();
     final streamUrl =
-        '$backendUrl/movie/${widget.movieUuid}/stream/${movie.uuid}';
+        '$backendUrl${AppConstants.apiEndpointMovie}/${widget.movieSeriesUuid}${AppConstants.apiEndpointMovieStream}/${selectedMovie.uuid}';
 
     try {
       _videoController = VideoPlayerController.networkUrl(Uri.parse(streamUrl));
-
       await _videoController!.initialize();
 
-      bool _hasTriggeredAutoNext = false;
+      bool hasTriggeredAutoNext = false;
 
       _videoController!.addListener(() {
-        if (mounted) {
-          setState(() {
-            _isVideoPlaying = _videoController!.value.isPlaying;
+        if (!mounted) return;
+
+        setState(() {
+          _isVideoPlaying = _videoController!.value.isPlaying;
+        });
+
+        // Auto play next when video ends
+        final position = _videoController!.value.position;
+        final duration = _videoController!.value.duration;
+
+        if (duration > Duration.zero &&
+            position >= duration - const Duration(milliseconds: 100) &&
+            _isAutoPlayEnabled &&
+            !hasTriggeredAutoNext) {
+          hasTriggeredAutoNext = true;
+          Future.delayed(AppConstants.autoNextDelay, () {
+            if (mounted && _isAutoPlayEnabled) {
+              _playNextVideo();
+            }
           });
-
-          // Auto play next when video ends
-          final position = _videoController!.value.position;
-          final duration = _videoController!.value.duration;
-
-          if (duration > Duration.zero &&
-              position >= duration - const Duration(milliseconds: 100) &&
-              isAutoPlay &&
-              !_hasTriggeredAutoNext) {
-            _hasTriggeredAutoNext = true;
-            // Delay to ensure video has fully ended
-            Future.delayed(const Duration(milliseconds: 200), () {
-              if (mounted && isAutoPlay) {
-                nextVideo();
-              }
-            });
-          }
         }
       });
 
       // Set volume
-      await _videoController!.setVolume(_volume);
+      await _videoController!.setVolume(_volumeLevel);
 
       if (mounted) {
         setState(() {
@@ -191,19 +175,18 @@ class _MoviePageState extends State<MoviePage> {
         });
 
         // Auto play if enabled
-        if (isAutoPlay) {
+        if (_isAutoPlayEnabled) {
           await _videoController!.play();
           setState(() {
             _isVideoPlaying = true;
           });
         }
       }
-    } catch (e) {
-      print('Error loading video: $e');
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading video: $e'),
+            content: Text('Error loading video: $error'),
             backgroundColor: Colors.red,
           ),
         );
@@ -211,7 +194,8 @@ class _MoviePageState extends State<MoviePage> {
     }
   }
 
-  void togglePlayPause() {
+  /// Toggle play/pause state
+  void _togglePlayPause() {
     if (_videoController == null || !_isVideoInitialized) return;
 
     if (_isVideoPlaying) {
@@ -221,395 +205,614 @@ class _MoviePageState extends State<MoviePage> {
     }
   }
 
-  Future<void> nextVideo() async {
-    if (movies.isEmpty) return;
+  /// Play next video in the list
+  Future<void> _playNextVideo() async {
+    if (_movieList.isEmpty) return;
 
-    final nextIndex = (currentIndex + 1) % movies.length;
-    await loadVideo(nextIndex);
+    final nextIndex = (_currentMovieIndex + 1) % _movieList.length;
+    await _loadVideo(nextIndex);
   }
 
-  Future<void> setVolume(double volume) async {
+  /// Toggle auto play feature
+  void _toggleAutoPlay() {
     setState(() {
-      _volume = volume;
+      _isAutoPlayEnabled = !_isAutoPlayEnabled;
     });
+  }
+
+  /// Update volume level
+  Future<void> _updateVolume(double volume) async {
+    if (mounted) {
+      setState(() {
+        _volumeLevel = volume;
+      });
+    }
     await _videoController?.setVolume(volume);
   }
 
-  void toggleAutoPlay() {
+  /// Toggle fullscreen mode
+  void _toggleFullscreen() {
     setState(() {
-      isAutoPlay = !isAutoPlay;
+      _isFullscreen = !_isFullscreen;
+      _showFullscreenControls = true;
+    });
+
+    if (_isFullscreen) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      _startFullscreenControlsTimer();
+    } else {
+      _fullscreenControlsTimer?.cancel();
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+  }
+
+  /// Start timer to hide fullscreen controls after inactivity
+  void _startFullscreenControlsTimer() {
+    _fullscreenControlsTimer?.cancel();
+    _fullscreenControlsTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && _isFullscreen) {
+        setState(() {
+          _showFullscreenControls = false;
+        });
+      }
     });
   }
 
-  String formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = duration.inHours;
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
+  /// Show fullscreen controls and reset timer
+  void _showFullscreenControlsAndReset() {
+    if (!_isFullscreen) return;
 
-    if (hours > 0) {
-      return '${twoDigits(hours)}:$minutes:$seconds';
-    }
-    return '$minutes:$seconds';
+    setState(() {
+      _showFullscreenControls = true;
+    });
+    _startFullscreenControlsTimer();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isFullscreen && _isVideoInitialized && _videoController != null) {
+      return _buildFullscreenView();
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: const Color(AppConstants.colorBackgroundDark),
       body: SafeArea(
         child: Column(
           children: [
-            // Video Player Section
+            _buildVideoPlayerSection(),
             if (_isVideoInitialized && _videoController != null)
-              Container(
-                width: double.infinity,
-                height: MediaQuery.of(context).size.height * 0.4,
-                color: Colors.black,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: _videoController!.value.aspectRatio,
-                      child: VideoPlayer(_videoController!),
-                    ),
-                    // Play/Pause overlay
-                    Positioned.fill(
-                      child: GestureDetector(
-                        onTap: togglePlayPause,
-                        child: Container(
-                          color: Colors.transparent,
-                          child: Center(
-                            child: Icon(
-                              _isVideoPlaying ? Icons.pause : Icons.play_arrow,
-                              size: 64,
-                              color: Colors.white.withOpacity(0.8),
-                            ),
+              _buildVideoControlsSection(),
+            const SizedBox(height: 8),
+            _buildMovieListSection(),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build fullscreen video view
+  Widget _buildFullscreenView() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Fullscreen video player
+          Center(
+            child: AspectRatio(
+              aspectRatio: _videoController!.value.aspectRatio,
+              child: VideoPlayer(_videoController!),
+            ),
+          ),
+          // Controls overlay with auto-hide
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () {
+                _showFullscreenControlsAndReset();
+                _togglePlayPause();
+              },
+              onPanUpdate: (_) => _showFullscreenControlsAndReset(),
+              onPanStart: (_) => _showFullscreenControlsAndReset(),
+              onPanEnd: (_) => _showFullscreenControlsAndReset(),
+              child: AnimatedOpacity(
+                opacity: _showFullscreenControls ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: Container(
+                  color: Colors.transparent,
+                  child: Column(
+                    children: [
+                      // Top controls
+                      SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _movieList[_currentMovieIndex].title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.fullscreen_exit,
+                                  color: Colors.white,
+                                  size: 32,
+                                ),
+                                onPressed: () {
+                                  _showFullscreenControlsAndReset();
+                                  _toggleFullscreen();
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              )
-            else if (isLoading)
-              Container(
-                width: double.infinity,
-                height: MediaQuery.of(context).size.height * 0.4,
-                color: Colors.black,
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFFFF0000),
-                    ),
-                  ),
-                ),
-              )
-            else
-              Container(
-                width: double.infinity,
-                height: MediaQuery.of(context).size.height * 0.4,
-                color: Colors.black,
-                child: const Center(
-                  child: Icon(
-                    Icons.videocam_off,
-                    size: 64,
-                    color: Colors.white38,
-                  ),
-                ),
-              ),
-
-            // Video Info and Controls
-            if (_isVideoInitialized && _videoController != null) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: const Color(0xFF1A1A1A),
-                child: Column(
-                  children: [
-                    // Video Title
-                    Text(
-                      movies[currentIndex].title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Progress Bar
-                    if (_videoController!.value.duration > Duration.zero) ...[
-                      VideoProgressIndicator(
-                        _videoController!,
-                        allowScrubbing: true,
-                        colors: const VideoProgressColors(
-                          playedColor: Color(0xFFFF0000),
-                          bufferedColor: Colors.white24,
-                          backgroundColor: Colors.white12,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              formatDuration(_videoController!.value.position),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
+                      const Spacer(),
+                      // Bottom controls
+                      SafeArea(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.8),
+                                Colors.transparent,
+                              ],
                             ),
-                            Text(
-                              formatDuration(_videoController!.value.duration),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
+                          ),
+                          child: Column(
+                            children: [
+                              // Progress bar
+                              if (_videoController!.value.duration >
+                                  Duration.zero) ...[
+                                GestureDetector(
+                                  onTap: _showFullscreenControlsAndReset,
+                                  child: VideoProgressIndicator(
+                                    _videoController!,
+                                    allowScrubbing: true,
+                                    colors: const VideoProgressColors(
+                                      playedColor: Color(
+                                        AppConstants.colorPrimaryRed,
+                                      ),
+                                      bufferedColor: Colors.white24,
+                                      backgroundColor: Colors.white12,
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4.0,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        DateTimeUtils.formatDuration(
+                                          _videoController!.value.position,
+                                        ),
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      Text(
+                                        DateTimeUtils.formatDuration(
+                                          _videoController!.value.duration,
+                                        ),
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              // Control buttons
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  _buildControlButton(
+                                    icon: _isVideoPlaying
+                                        ? Icons.pause
+                                        : Icons.play_arrow,
+                                    onTap: () {
+                                      _showFullscreenControlsAndReset();
+                                      _togglePlayPause();
+                                    },
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildControlButton(
+                                    icon: Icons.skip_next,
+                                    onTap: () {
+                                      _showFullscreenControlsAndReset();
+                                      _playNextVideo();
+                                    },
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildControlButton(
+                                    icon: _isFullscreen
+                                        ? Icons.fullscreen_exit
+                                        : Icons.fullscreen,
+                                    onTap: () {
+                                      _showFullscreenControlsAndReset();
+                                      _toggleFullscreen();
+                                    },
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 12),
-
-                    // Controls
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Play/Pause
-                        SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: togglePlayPause,
-                              borderRadius: BorderRadius.circular(24),
-                              child: Icon(
-                                _isVideoPlaying
-                                    ? Icons.pause
-                                    : Icons.play_arrow,
-                                size: 36,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Next
-                        SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: nextVideo,
-                              borderRadius: BorderRadius.circular(24),
-                              child: const Icon(
-                                Icons.skip_next,
-                                size: 36,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // Auto Play Toggle
-                        Row(
-                          children: [
-                            const Text(
-                              'Auto Play',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Switch(
-                              value: isAutoPlay,
-                              onChanged: (value) => toggleAutoPlay(),
-                              activeColor: const Color(0xFFFF0000),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 16),
-                        // Volume Control
-                        SizedBox(
-                          height: 48,
-                          child: Center(
-                            child: const Icon(
-                              Icons.volume_down,
-                              size: 20,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        SizedBox(
-                          height: 48,
-                          width: 100,
-                          child: Center(
-                            child: SliderTheme(
-                              data: SliderThemeData(
-                                trackHeight: 3.0,
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 6,
-                                ),
-                                activeTrackColor: const Color(0xFFFF0000),
-                                inactiveTrackColor: Colors.white24,
-                                thumbColor: const Color(0xFFFF0000),
-                              ),
-                              child: Slider(
-                                value: _volume,
-                                min: 0.0,
-                                max: 1.0,
-                                onChanged: setVolume,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        SizedBox(
-                          height: 48,
-                          child: Center(
-                            child: const Icon(
-                              Icons.volume_up,
-                              size: 20,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        SizedBox(
-                          height: 48,
-                          child: Center(
-                            child: Text(
-                              '${(_volume * 100).toStringAsFixed(0)}%',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 8),
-
-            // Movie List
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Movies (${movies.length})',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.refresh,
-                              color: Colors.white,
-                            ),
-                            onPressed: loadMovies,
-                            tooltip: 'Refresh',
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: isLoading && movies.isEmpty
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFFFF0000),
-                                ),
-                              ),
-                            )
-                          : movies.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No movies available',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            )
-                          : GridView.builder(
-                              padding: const EdgeInsets.all(16),
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 8,
-                                    crossAxisSpacing: 12,
-                                    mainAxisSpacing: 12,
-                                    childAspectRatio: 1.2,
-                                  ),
-                              itemCount: movies.length,
-                              itemBuilder: (context, index) {
-                                final movie = movies[index];
-                                final isSelected = index == currentIndex;
-                                return Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () => loadVideo(index),
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? const Color(0xFFFF0000)
-                                            : const Color(0xFF2A2A2A),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          movie.title,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? Colors.white
-                                                : Colors.white70,
-                                            fontSize: 16,
-                                            fontWeight: isSelected
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build video player widget
+  Widget _buildVideoPlayerSection() {
+    if (_isVideoInitialized && _videoController != null) {
+      return Container(
+        width: double.infinity,
+        height: MediaQuery.of(context).size.height * 0.4,
+        color: Colors.black,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AspectRatio(
+              aspectRatio: _videoController!.value.aspectRatio,
+              child: VideoPlayer(_videoController!),
+            ),
+            // Play/Pause overlay
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _togglePlayPause,
+                child: Container(
+                  color: Colors.transparent,
+                  child: Center(
+                    child: Icon(
+                      _isVideoPlaying ? Icons.pause : Icons.play_arrow,
+                      size: 64,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
+        ),
+      );
+    }
+
+    if (_isLoadingMovies) {
+      return Container(
+        width: double.infinity,
+        height: MediaQuery.of(context).size.height * 0.4,
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Color(AppConstants.colorPrimaryRed),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      height: MediaQuery.of(context).size.height * 0.4,
+      color: Colors.black,
+      child: const Center(
+        child: Icon(Icons.videocam_off, size: 64, color: Colors.white38),
+      ),
+    );
+  }
+
+  /// Build video controls section
+  Widget _buildVideoControlsSection() {
+    final currentMovie = _movieList[_currentMovieIndex];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: const Color(AppConstants.colorCardDark),
+      child: Column(
+        children: [
+          // Video Title
+          Text(
+            currentMovie.title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+
+          // Progress Bar
+          if (_videoController!.value.duration > Duration.zero) ...[
+            VideoProgressIndicator(
+              _videoController!,
+              allowScrubbing: true,
+              colors: const VideoProgressColors(
+                playedColor: Color(AppConstants.colorPrimaryRed),
+                bufferedColor: Colors.white24,
+                backgroundColor: Colors.white12,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    DateTimeUtils.formatDuration(
+                      _videoController!.value.position,
+                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  Text(
+                    DateTimeUtils.formatDuration(
+                      _videoController!.value.duration,
+                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+
+          // Controls
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildControlButton(
+                icon: _isVideoPlaying ? Icons.pause : Icons.play_arrow,
+                onTap: _togglePlayPause,
+              ),
+              const SizedBox(width: 8),
+              _buildControlButton(icon: Icons.skip_next, onTap: _playNextVideo),
+              const SizedBox(width: 8),
+              _buildControlButton(
+                icon: Icons.fullscreen,
+                onTap: _toggleFullscreen,
+              ),
+              const SizedBox(width: 16),
+              // Auto Play Toggle
+              Row(
+                children: [
+                  const Text(
+                    'Auto Play',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: _isAutoPlayEnabled,
+                    onChanged: (_) => _toggleAutoPlay(),
+                    activeColor: const Color(AppConstants.colorPrimaryRed),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              _buildVolumeControl(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build control button widget
+  Widget _buildControlButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Icon(icon, size: 36, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  /// Build volume control widget
+  Widget _buildVolumeControl() {
+    return Row(
+      children: [
+        SizedBox(
+          height: 48,
+          child: Center(
+            child: const Icon(
+              Icons.volume_down,
+              size: 20,
+              color: Colors.white70,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          height: 48,
+          width: 100,
+          child: Center(
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3.0,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                activeTrackColor: const Color(AppConstants.colorPrimaryRed),
+                inactiveTrackColor: Colors.white24,
+                thumbColor: const Color(AppConstants.colorPrimaryRed),
+              ),
+              child: Slider(
+                value: _volumeLevel,
+                min: 0.0,
+                max: 1.0,
+                onChanged: _updateVolume,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          height: 48,
+          child: Center(
+            child: const Icon(Icons.volume_up, size: 20, color: Colors.white70),
+          ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          height: 48,
+          child: Center(
+            child: Text(
+              '${(_volumeLevel * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build movie list section
+  Widget _buildMovieListSection() {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(AppConstants.colorCardDark),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Movies (${_movieList.length})',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    onPressed: _loadMovieList,
+                    tooltip: 'Refresh',
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: _buildMovieListContent()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build movie list content
+  Widget _buildMovieListContent() {
+    if (_isLoadingMovies && _movieList.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(
+            Color(AppConstants.colorPrimaryRed),
+          ),
+        ),
+      );
+    }
+
+    if (_movieList.isEmpty) {
+      return const Center(
+        child: Text(
+          'No movies available',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: AppConstants.gridCrossAxisCount,
+        crossAxisSpacing: AppConstants.gridSpacing,
+        mainAxisSpacing: AppConstants.gridSpacing,
+        childAspectRatio: AppConstants.gridAspectRatio,
+      ),
+      itemCount: _movieList.length,
+      itemBuilder: (context, index) {
+        final movie = _movieList[index];
+        final isSelected = index == _currentMovieIndex;
+        return _buildMovieCard(movie, index, isSelected);
+      },
+    );
+  }
+
+  /// Build individual movie card
+  Widget _buildMovieCard(MovieModel movie, int index, bool isSelected) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _loadVideo(index),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(AppConstants.colorPrimaryRed)
+                : const Color(AppConstants.colorSecondaryDark),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              movie.title,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white70,
+                fontSize: 16,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
       ),
     );

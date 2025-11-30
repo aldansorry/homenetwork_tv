@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../services/settings_service.dart';
+import '../constants/app_constants.dart';
+import '../utils/url_validator.dart';
 
+/// Settings page for configuring application settings
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -11,10 +14,10 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController _backendUrlController = TextEditingController();
-  final TextEditingController _youtubeController = TextEditingController();
-  String message = "";
-  bool isLoading = false;
-  bool isSavingBackendUrl = false;
+  final TextEditingController _youtubeUrlController = TextEditingController();
+  String _statusMessage = '';
+  bool _isLoadingDownloader = false;
+  bool _isSavingBackendUrl = false;
 
   @override
   void initState() {
@@ -22,6 +25,14 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadBackendUrl();
   }
 
+  @override
+  void dispose() {
+    _backendUrlController.dispose();
+    _youtubeUrlController.dispose();
+    super.dispose();
+  }
+
+  /// Load current backend URL from settings
   Future<void> _loadBackendUrl() async {
     final url = await SettingsService.getBackendUrl();
     if (mounted) {
@@ -31,218 +42,119 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> saveBackendUrl() async {
+  /// Save backend URL to settings
+  Future<void> _saveBackendUrl() async {
     final url = _backendUrlController.text.trim();
 
     if (url.isEmpty) {
-      setState(() => message = "Backend URL tidak boleh kosong");
+      _showMessage('Backend URL tidak boleh kosong', isError: true);
       return;
     }
 
-    // Validate URL format
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      setState(
-        () => message = "URL harus dimulai dengan http:// atau https://",
+    if (!UrlValidator.isValidHttpUrl(url)) {
+      _showMessage(
+        'URL harus dimulai dengan http:// atau https://',
+        isError: true,
       );
       return;
     }
 
     setState(() {
-      isSavingBackendUrl = true;
-      message = "";
+      _isSavingBackendUrl = true;
+      _statusMessage = '';
     });
 
     try {
       final success = await SettingsService.setBackendUrl(url);
       if (success) {
-        setState(() => message = "Backend URL berhasil disimpan");
+        _showMessage('Backend URL berhasil disimpan', isError: false);
       } else {
-        setState(() => message = "Gagal menyimpan Backend URL");
+        _showMessage('Gagal menyimpan Backend URL', isError: true);
       }
-    } catch (e) {
-      setState(() => message = "Error: $e");
+    } catch (error) {
+      _showMessage('Error: $error', isError: true);
     } finally {
-      setState(() => isSavingBackendUrl = false);
+      if (mounted) {
+        setState(() {
+          _isSavingBackendUrl = false;
+        });
+      }
     }
   }
 
-  /// Cek apakah input cuma ID YouTube (11 karakter, alphanumeric + _ - )
-  bool _isYoutubeId(String text) {
+  /// Show status message
+  void _showMessage(String message, {required bool isError}) {
+    if (mounted) {
+      setState(() {
+        _statusMessage = message;
+      });
+    }
+  }
+
+  /// Check if input is YouTube ID (11 characters, alphanumeric + _ -)
+  bool _isYouTubeId(String text) {
     final regex = RegExp(r'^[a-zA-Z0-9_-]{11}$');
     return regex.hasMatch(text);
   }
 
-  Future<void> downloadAudio() async {
-    String urlInput = _youtubeController.text.trim();
+  /// Download audio from YouTube
+  Future<void> _downloadAudioFromYouTube() async {
+    String urlInput = _youtubeUrlController.text.trim();
 
     if (urlInput.isEmpty) {
-      setState(() => message = "URL kosong");
+      _showMessage('URL kosong', isError: true);
       return;
     }
 
-    // Auto tambahkan prefix jika yang dimasukkan hanya ID
-    if (_isYoutubeId(urlInput)) {
-      urlInput = "https://www.youtube.com/watch?v=$urlInput";
+    // Auto add prefix if input is only ID
+    if (_isYouTubeId(urlInput)) {
+      urlInput = 'https://www.youtube.com/watch?v=$urlInput';
     }
 
     final backendUrl = await SettingsService.getBackendUrl();
-    final uri = Uri.parse("$backendUrl/downloader/youtube?url=$urlInput");
+    final apiUrl =
+        '$backendUrl${AppConstants.apiEndpointDownloaderYoutube}?url=$urlInput';
 
     setState(() {
-      isLoading = true;
-      message = "";
+      _isLoadingDownloader = true;
+      _statusMessage = '';
     });
 
     try {
-      final response = await http.post(uri);
+      final response = await http.post(Uri.parse(apiUrl));
 
       if (response.statusCode == 200) {
-        setState(() => message = "Berhasil");
+        _showMessage('Berhasil', isError: false);
       } else {
-        setState(() => message = "Error saja");
+        _showMessage('Error: ${response.statusCode}', isError: true);
       }
-    } catch (e) {
-      setState(() => message = "Error: $e");
+    } catch (error) {
+      _showMessage('Error: $error', isError: true);
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingDownloader = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: const Color(AppConstants.colorBackgroundDark),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: ListView(
             children: [
-              const Text(
-                "Settings",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+              _buildTitle(),
               const SizedBox(height: 30),
-
-              // Backend URL Section
-              const Text(
-                "Backend URL",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white70,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _backendUrlController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: "Backend URL",
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  hintText: "http://localhost:3000",
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  border: const OutlineInputBorder(),
-                  enabledBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white38),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFFF0000)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isSavingBackendUrl ? null : saveBackendUrl,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF0000),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: isSavingBackendUrl
-                      ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : const Text("Save Backend URL"),
-                ),
-              ),
+              _buildBackendUrlSection(),
               const SizedBox(height: 30),
-
-              // YouTube Downloader Section
-              const Text(
-                "YouTube Downloader",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white70,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _youtubeController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: "Masukkan URL / YouTube ID",
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  border: const OutlineInputBorder(),
-                  enabledBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white38),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFFF0000)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : downloadAudio,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF0000),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: isLoading
-                      ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : const Text("Download"),
-                ),
-              ),
+              _buildYouTubeDownloaderSection(),
               const SizedBox(height: 20),
-
-              // Message
-              if (message.isNotEmpty)
-                Text(
-                  message,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: message.contains("berhasil") || message == "Berhasil"
-                        ? Colors.green
-                        : Colors.red,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+              _buildStatusMessage(),
             ],
           ),
         ),
@@ -250,10 +162,148 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  @override
-  void dispose() {
-    _backendUrlController.dispose();
-    _youtubeController.dispose();
-    super.dispose();
+  /// Build page title
+  Widget _buildTitle() {
+    return const Text(
+      'Settings',
+      style: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  /// Build backend URL configuration section
+  Widget _buildBackendUrlSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Backend URL',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white70,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _backendUrlController,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: 'Backend URL',
+            labelStyle: const TextStyle(color: Colors.white70),
+            hintText: AppConstants.defaultBackendUrl,
+            hintStyle: const TextStyle(color: Colors.white38),
+            border: const OutlineInputBorder(),
+            enabledBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.white38),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderSide: BorderSide(
+                color: Color(AppConstants.colorPrimaryRed),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isSavingBackendUrl ? null : _saveBackendUrl,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(AppConstants.colorPrimaryRed),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: _isSavingBackendUrl
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Save Backend URL'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build YouTube downloader section
+  Widget _buildYouTubeDownloaderSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'YouTube Downloader',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white70,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _youtubeUrlController,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: 'Masukkan URL / YouTube ID',
+            labelStyle: const TextStyle(color: Colors.white70),
+            border: const OutlineInputBorder(),
+            enabledBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.white38),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderSide: BorderSide(
+                color: Color(AppConstants.colorPrimaryRed),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isLoadingDownloader ? null : _downloadAudioFromYouTube,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(AppConstants.colorPrimaryRed),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: _isLoadingDownloader
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Download'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build status message widget
+  Widget _buildStatusMessage() {
+    if (_statusMessage.isEmpty) return const SizedBox.shrink();
+
+    final isSuccess =
+        _statusMessage.contains('berhasil') || _statusMessage == 'Berhasil';
+
+    return Text(
+      _statusMessage,
+      style: TextStyle(
+        fontSize: 14,
+        color: isSuccess ? Colors.green : Colors.red,
+      ),
+      textAlign: TextAlign.center,
+    );
   }
 }
