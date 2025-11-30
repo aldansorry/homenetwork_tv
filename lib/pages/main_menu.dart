@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'movie_page.dart';
 import 'music_player_page.dart';
+import 'settings_page.dart';
 
 class MainMenu extends StatefulWidget {
   const MainMenu({super.key});
@@ -17,6 +18,7 @@ class _MainMenuState extends State<MainMenu> {
     HomePage(),
     MoviePage(),
     MusicPlayerPage(),
+    SettingsPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -28,17 +30,20 @@ class _MainMenuState extends State<MainMenu> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('HomeNetwork'),
-      ),
+      appBar: AppBar(title: const Text('HomeNetwork')),
       body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.movie), label: 'Movie'),
           BottomNavigationBarItem(icon: Icon(Icons.music_note), label: 'Music'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
         ],
       ),
     );

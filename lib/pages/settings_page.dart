@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-class MoviePage extends StatefulWidget {
-  const MoviePage({super.key});
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
 
   @override
-  State<MoviePage> createState() => _MoviePageState();
+  State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _MoviePageState extends State<MoviePage> {
+class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController _controller = TextEditingController();
   String message = "";
   bool isLoading = false;
@@ -33,7 +33,8 @@ class _MoviePageState extends State<MoviePage> {
     }
 
     final uri = Uri.parse(
-        "http://localhost:3000/downloader/youtube?url=$urlInput");
+      "http://localhost:3000/downloader/youtube?url=$urlInput",
+    );
 
     setState(() {
       isLoading = true;
@@ -87,9 +88,7 @@ class _MoviePageState extends State<MoviePage> {
                   ? const SizedBox(
                       height: 22,
                       width: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
                     )
                   : const Text("Submit"),
             ),
@@ -103,7 +102,7 @@ class _MoviePageState extends State<MoviePage> {
               fontSize: 18,
               color: message == "Berhasil" ? Colors.green : Colors.red,
             ),
-          )
+          ),
         ],
       ),
     );

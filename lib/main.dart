@@ -12,7 +12,7 @@ class HomeNetworkApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'HomeNetwork',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: false),
       home: const MainMenu(),
     );
   }
