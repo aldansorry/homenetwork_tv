@@ -114,4 +114,44 @@ class AudioService {
       return false;
     }
   }
+
+  static Future<bool> clearPlaylist() async {
+    try {
+      final audioDir = await getAudioDirectory();
+      final dir = Directory(audioDir);
+      
+      if (!await dir.exists()) return true;
+
+      await for (var entity in dir.list(recursive: true)) {
+        if (entity is File) {
+          final extension = entity.path.split('.').last.toLowerCase();
+          if (['mp3', 'm4a', 'webm', 'weba', 'wav', 'ogg'].contains(extension)) {
+            await entity.delete();
+            print('Deleted: ${entity.path}');
+          }
+        }
+      }
+
+      print('Playlist cleared successfully');
+      return true;
+    } catch (e) {
+      print('Error clearing playlist: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteAudioFile(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+        print('Deleted audio file: $filePath');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Error deleting audio file: $e');
+      return false;
+    }
+  }
 }

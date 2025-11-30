@@ -154,7 +154,7 @@ class AudioService {
     try {
       final factory = idbFactoryBrowser;
       final db = await factory.open(_dbName, version: 1, onUpgradeNeeded: (e) {
-        final d = e.database as idb.Database;
+        final d = e.database;
         if (!d.objectStoreNames.contains(_storeName)) {
           d.createObjectStore(_storeName);
         }
@@ -211,5 +211,65 @@ class AudioService {
     final store = txn.objectStore(_storeName);
     await store.clear();
     await txn.completed;
+  }
+
+  static Future<bool> clearPlaylist() async {
+    try {
+      // Revoke all blob URLs
+      _webAudioUrls.forEach((_, url) {
+        try {
+          html.Url.revokeObjectUrl(url);
+        } catch (_) {}
+      });
+
+      // Clear in-memory data
+      _webAudioFiles.clear();
+      _webAudioData.clear();
+      _webAudioUrls.clear();
+
+      // Clear IndexedDB
+      final db = await _openDb();
+      if (db != null) {
+        await _clearStore(db);
+      }
+
+      print('Playlist cleared successfully (web)');
+      return true;
+    } catch (e) {
+      print('Error clearing playlist (web): $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteAudioFile(String fileName) async {
+    try {
+      // Revoke blob URL
+      final url = _webAudioUrls[fileName];
+      if (url != null) {
+        try {
+          html.Url.revokeObjectUrl(url);
+        } catch (_) {}
+        _webAudioUrls.remove(fileName);
+      }
+
+      // Remove from in-memory data
+      _webAudioFiles.remove(fileName);
+      _webAudioData.remove(fileName);
+
+      // Remove from IndexedDB
+      final db = await _openDb();
+      if (db != null) {
+        final txn = db.transaction(_storeName, idb.idbModeReadWrite);
+        final store = txn.objectStore(_storeName);
+        await store.delete(fileName);
+        await txn.completed;
+      }
+
+      print('Deleted audio file (web): $fileName');
+      return true;
+    } catch (e) {
+      print('Error deleting audio file (web): $e');
+      return false;
+    }
   }
 }
