@@ -25,7 +25,7 @@ class _MoviePageState extends State<MoviePage> {
   List<MovieModel> _movieList = [];
   int _currentMovieIndex = 0;
   bool _isLoadingMovies = false;
-  bool _isAutoPlayEnabled = false;
+  bool _isAutoPlayEnabled = true;
   double _volumeLevel = AppConstants.defaultVolume;
   VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
@@ -34,6 +34,7 @@ class _MoviePageState extends State<MoviePage> {
   bool _showFullscreenControls = true;
   Timer? _fullscreenControlsTimer;
   final List<FocusNode> _gridFocusNodes = [];
+  final ScrollController _gridScrollController = ScrollController();
   int _focusedGridIndex = 0;
 
   @override
@@ -46,6 +47,7 @@ class _MoviePageState extends State<MoviePage> {
   void dispose() {
     // Cancel timer
     _fullscreenControlsTimer?.cancel();
+    _gridScrollController.dispose();
     // Dispose focus nodes
     for (var node in _gridFocusNodes) {
       node.dispose();
@@ -87,6 +89,7 @@ class _MoviePageState extends State<MoviePage> {
               _focusedGridIndex++;
             });
             _gridFocusNodes[_focusedGridIndex].requestFocus();
+            _scrollToGridItem(_focusedGridIndex);
           }
           break;
         case LogicalKeyboardKey.arrowLeft:
@@ -95,6 +98,7 @@ class _MoviePageState extends State<MoviePage> {
               _focusedGridIndex--;
             });
             _gridFocusNodes[_focusedGridIndex].requestFocus();
+            _scrollToGridItem(_focusedGridIndex);
           }
           break;
         case LogicalKeyboardKey.arrowDown:
@@ -104,6 +108,7 @@ class _MoviePageState extends State<MoviePage> {
               _focusedGridIndex = nextIndex;
             });
             _gridFocusNodes[_focusedGridIndex].requestFocus();
+            _scrollToGridItem(_focusedGridIndex);
           }
           break;
         case LogicalKeyboardKey.arrowUp:
@@ -113,6 +118,7 @@ class _MoviePageState extends State<MoviePage> {
               _focusedGridIndex = prevIndex;
             });
             _gridFocusNodes[_focusedGridIndex].requestFocus();
+            _scrollToGridItem(_focusedGridIndex);
           }
           break;
         case LogicalKeyboardKey.select:
@@ -123,6 +129,24 @@ class _MoviePageState extends State<MoviePage> {
           break;
       }
     }
+  }
+
+  Future<void> _seekRelative(int seconds) async {
+    if (_videoController == null || !_isVideoInitialized) return;
+
+    final current = _videoController!.value.position;
+    final duration = _videoController!.value.duration;
+
+    Duration target = current + Duration(seconds: seconds);
+
+    // clamp supaya tidak keluar batas
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > duration) target = duration;
+
+    await _videoController!.seekTo(target);
+
+    // Tampilkan control sebentar
+    _showFullscreenControlsAndReset();
   }
 
   /// Load list of movies/episodes from API
@@ -218,9 +242,12 @@ class _MoviePageState extends State<MoviePage> {
       _videoController!.addListener(() {
         if (!mounted) return;
 
-        setState(() {
-          _isVideoPlaying = _videoController!.value.isPlaying;
-        });
+        final isPlaying = _videoController!.value.isPlaying;
+        if (isPlaying != _isVideoPlaying) {
+          setState(() {
+            _isVideoPlaying = _videoController!.value.isPlaying;
+          });
+        }
 
         // Auto play next when video ends
         final position = _videoController!.value.position;
@@ -351,6 +378,17 @@ class _MoviePageState extends State<MoviePage> {
     _startFullscreenControlsTimer();
   }
 
+  void _scrollToGridItem(int index) {
+    final itemExtent = 275.0; // tinggi + spacing movie card, sesuaikan
+    final offset = (index ~/ TvConstants.tvGridCrossAxisCount) * itemExtent;
+
+    _gridScrollController.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isFullscreen && _isVideoInitialized && _videoController != null) {
@@ -382,174 +420,197 @@ class _MoviePageState extends State<MoviePage> {
 
   /// Build fullscreen video view
   Widget _buildFullscreenView() {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Fullscreen video player
-          Center(
-            child: AspectRatio(
-              aspectRatio: _videoController!.value.aspectRatio,
-              child: VideoPlayer(_videoController!),
+    return KeyboardListener(
+      focusNode: FocusNode()..requestFocus(),
+      autofocus: true,
+      onKeyEvent: (KeyEvent event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            _seekRelative(-10); // rewind
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            _seekRelative(10); // forward
+          }
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter) {
+            _togglePlayPause();
+          }
+          if (event.logicalKey == LogicalKeyboardKey.escape ||
+              event.logicalKey == LogicalKeyboardKey.goBack ||
+              event.logicalKey == LogicalKeyboardKey.backspace) {
+            _toggleFullscreen();
+          }
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            // Fullscreen video player
+            Center(
+              child: AspectRatio(
+                aspectRatio: _videoController!.value.aspectRatio,
+                child: VideoPlayer(_videoController!),
+              ),
             ),
-          ),
-          // Controls overlay with auto-hide
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () {
-                _showFullscreenControlsAndReset();
-                _togglePlayPause();
-              },
-              onPanUpdate: (_) => _showFullscreenControlsAndReset(),
-              onPanStart: (_) => _showFullscreenControlsAndReset(),
-              onPanEnd: (_) => _showFullscreenControlsAndReset(),
-              child: AnimatedOpacity(
-                opacity: _showFullscreenControls ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 300),
-                child: Container(
-                  color: Colors.transparent,
-                  child: Column(
-                    children: [
-                      // Top controls
-                      SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                _movieList[_currentMovieIndex].title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+            // Controls overlay with auto-hide
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  _showFullscreenControlsAndReset();
+                  _togglePlayPause();
+                },
+                onPanUpdate: (_) => _showFullscreenControlsAndReset(),
+                onPanStart: (_) => _showFullscreenControlsAndReset(),
+                onPanEnd: (_) => _showFullscreenControlsAndReset(),
+                child: AnimatedOpacity(
+                  opacity: _showFullscreenControls ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    color: Colors.transparent,
+                    child: Column(
+                      children: [
+                        // Top controls
+                        SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _movieList[_currentMovieIndex].title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.fullscreen_exit,
-                                  color: Colors.white,
-                                  size: 32,
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.fullscreen_exit,
+                                    color: Colors.white,
+                                    size: 32,
+                                  ),
+                                  onPressed: () {
+                                    _showFullscreenControlsAndReset();
+                                    _toggleFullscreen();
+                                  },
                                 ),
-                                onPressed: () {
-                                  _showFullscreenControlsAndReset();
-                                  _toggleFullscreen();
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      // Bottom controls
-                      SafeArea(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Colors.black.withOpacity(0.8),
-                                Colors.transparent,
                               ],
                             ),
                           ),
-                          child: Column(
-                            children: [
-                              // Progress bar
-                              if (_videoController!.value.duration >
-                                  Duration.zero) ...[
-                                GestureDetector(
-                                  onTap: _showFullscreenControlsAndReset,
-                                  child: VideoProgressIndicator(
-                                    _videoController!,
-                                    allowScrubbing: true,
-                                    colors: const VideoProgressColors(
-                                      playedColor: Color(
-                                        AppConstants.colorPrimaryRed,
-                                      ),
-                                      bufferedColor: Colors.white24,
-                                      backgroundColor: Colors.white12,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4.0,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        DateTimeUtils.formatDuration(
-                                          _videoController!.value.position,
-                                        ),
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      Text(
-                                        DateTimeUtils.formatDuration(
-                                          _videoController!.value.duration,
-                                        ),
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 16),
-                              // Control buttons
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  _buildControlButton(
-                                    icon: _isVideoPlaying
-                                        ? Icons.pause
-                                        : Icons.play_arrow,
-                                    onTap: () {
-                                      _showFullscreenControlsAndReset();
-                                      _togglePlayPause();
-                                    },
-                                  ),
-                                  const SizedBox(width: 16),
-                                  _buildControlButton(
-                                    icon: Icons.skip_next,
-                                    onTap: () {
-                                      _showFullscreenControlsAndReset();
-                                      _playNextVideo();
-                                    },
-                                  ),
-                                  const SizedBox(width: 16),
-                                  _buildControlButton(
-                                    icon: _isFullscreen
-                                        ? Icons.fullscreen_exit
-                                        : Icons.fullscreen,
-                                    onTap: () {
-                                      _showFullscreenControlsAndReset();
-                                      _toggleFullscreen();
-                                    },
-                                  ),
+                        ),
+                        const Spacer(),
+                        // Bottom controls
+                        SafeArea(
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.8),
+                                  Colors.transparent,
                                 ],
                               ),
-                            ],
+                            ),
+                            child: Column(
+                              children: [
+                                // Progress bar
+                                if (_videoController!.value.duration >
+                                    Duration.zero) ...[
+                                  GestureDetector(
+                                    onTap: _showFullscreenControlsAndReset,
+                                    child: VideoProgressIndicator(
+                                      _videoController!,
+                                      allowScrubbing: true,
+                                      colors: const VideoProgressColors(
+                                        playedColor: Color(
+                                          AppConstants.colorPrimaryRed,
+                                        ),
+                                        bufferedColor: Colors.white24,
+                                        backgroundColor: Colors.white12,
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4.0,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          DateTimeUtils.formatDuration(
+                                            _videoController!.value.position,
+                                          ),
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        Text(
+                                          DateTimeUtils.formatDuration(
+                                            _videoController!.value.duration,
+                                          ),
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 16),
+                                // Control buttons
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    _buildControlButton(
+                                      icon: _isVideoPlaying
+                                          ? Icons.pause
+                                          : Icons.play_arrow,
+                                      onTap: () {
+                                        _showFullscreenControlsAndReset();
+                                        _togglePlayPause();
+                                      },
+                                    ),
+                                    const SizedBox(width: 16),
+                                    _buildControlButton(
+                                      icon: Icons.skip_next,
+                                      onTap: () {
+                                        _showFullscreenControlsAndReset();
+                                        _playNextVideo();
+                                      },
+                                    ),
+                                    const SizedBox(width: 16),
+                                    _buildControlButton(
+                                      icon: _isFullscreen
+                                          ? Icons.fullscreen_exit
+                                          : Icons.fullscreen,
+                                      onTap: () {
+                                        _showFullscreenControlsAndReset();
+                                        _toggleFullscreen();
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -799,38 +860,37 @@ class _MoviePageState extends State<MoviePage> {
         ),
         child: Column(
           children: [
-                    Padding(
-                      padding: const EdgeInsets.all(TvConstants.tvCardPadding),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Movies (${_movieList.length})',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: TvConstants.tvFontSizeSubtitle,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          TvFocusableWidget(
-                            onTap: _loadMovieList,
-                            child: Container(
-                              padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
-                              decoration: BoxDecoration(
-                                color: Color(TvConstants.tvFocusColor)
-                                    .withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.refresh,
-                                color: Colors.white,
-                                size: TvConstants.tvIconSizeLarge,
-                              ),
-                            ),
-                          ),
-                        ],
+            Padding(
+              padding: const EdgeInsets.all(TvConstants.tvCardPadding),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Movies (${_movieList.length})',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: TvConstants.tvFontSizeSubtitle,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TvFocusableWidget(
+                    onTap: _loadMovieList,
+                    child: Container(
+                      padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
+                      decoration: BoxDecoration(
+                        color: Color(TvConstants.tvFocusColor).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.refresh,
+                        color: Colors.white,
+                        size: TvConstants.tvIconSizeLarge,
                       ),
                     ),
+                  ),
+                ],
+              ),
+            ),
             Expanded(child: _buildMovieListContent()),
           ],
         ),
@@ -860,6 +920,7 @@ class _MoviePageState extends State<MoviePage> {
     }
 
     return GridView.builder(
+      controller: _gridScrollController,
       padding: const EdgeInsets.all(TvConstants.tvCardPadding),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: TvConstants.tvGridCrossAxisCount,
@@ -888,6 +949,12 @@ class _MoviePageState extends State<MoviePage> {
               ? const Color(AppConstants.colorPrimaryRed)
               : const Color(AppConstants.colorSecondaryDark),
           borderRadius: BorderRadius.circular(8),
+          border: _gridFocusNodes[index].hasFocus
+              ? Border.all(
+                  color: Color(TvConstants.tvFocusColor),
+                  width: TvConstants.tvFocusBorderWidth,
+                )
+              : null,
         ),
         child: Center(
           child: Padding(

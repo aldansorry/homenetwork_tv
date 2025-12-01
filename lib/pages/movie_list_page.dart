@@ -93,7 +93,9 @@ class _MovieListPageState extends State<MovieListPage> {
       final backendUrl = await SettingsService.getBackendUrl();
       final apiUrl = '$backendUrl${AppConstants.apiEndpointMovie}';
 
-      final response = await http.get(Uri.parse(apiUrl)).timeout(
+      final response = await http
+          .get(Uri.parse(apiUrl))
+          .timeout(
             AppConstants.networkTimeout,
             onTimeout: () => throw Exception('Request timeout'),
           );
@@ -101,10 +103,11 @@ class _MovieListPageState extends State<MovieListPage> {
       if (response.statusCode == 200) {
         final responseData = ApiResponseParser.parseJson(response.body);
         if (responseData != null) {
-          final parsedSeries = ApiResponseParser.parseListResponse<MovieSeriesModel>(
-            responseData: responseData,
-            fromJson: MovieSeriesModel.fromJson,
-          );
+          final parsedSeries =
+              ApiResponseParser.parseListResponse<MovieSeriesModel>(
+                responseData: responseData,
+                fromJson: MovieSeriesModel.fromJson,
+              );
 
           if (parsedSeries != null && mounted) {
             setState(() {
@@ -132,10 +135,7 @@ class _MovieListPageState extends State<MovieListPage> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(errorMessage),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
     );
   }
 
@@ -216,27 +216,27 @@ class _MovieListPageState extends State<MovieListPage> {
               ),
             )
           : _movieSeriesList.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No movie series available',
-                    style: TextStyle(color: Colors.white70),
+          ? const Center(
+              child: Text(
+                'No movie series available',
+                style: TextStyle(color: Colors.white70),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TvConstants.tvSpacingMedium,
+              ),
+              itemCount: _movieSeriesList.length,
+              itemBuilder: (context, index) {
+                final series = _movieSeriesList[index];
+                return Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: TvConstants.tvSpacingLarge,
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TvConstants.tvSpacingMedium,
-                  ),
-                  itemCount: _movieSeriesList.length,
-                  itemBuilder: (context, index) {
-                    final series = _movieSeriesList[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: TvConstants.tvSpacingLarge,
-                      ),
-                      child: _buildSeriesBanner(series, index),
-                    );
-                  },
-                ),
+                  child: _buildSeriesBanner(series, index),
+                );
+              },
+            ),
     );
   }
 
@@ -251,6 +251,12 @@ class _MovieListPageState extends State<MovieListPage> {
         decoration: BoxDecoration(
           color: const Color(AppConstants.colorCardDark),
           borderRadius: BorderRadius.circular(12),
+          border: _focusNodes[index].hasFocus
+              ? Border.all(
+                  color: Color(TvConstants.tvFocusColor),
+                  width: TvConstants.tvFocusBorderWidth,
+                )
+              : null,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
@@ -289,11 +295,7 @@ class _MovieListPageState extends State<MovieListPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.movie,
-              size: 64,
-              color: Colors.white38,
-            ),
+            const Icon(Icons.movie, size: 64, color: Colors.white38),
             const SizedBox(height: 8),
             Text(
               title,
@@ -319,10 +321,7 @@ class _MovieListPageState extends State<MovieListPage> {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Colors.black.withOpacity(0.7),
-          ],
+          colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
         ),
       ),
     );
@@ -334,23 +333,19 @@ class _MovieListPageState extends State<MovieListPage> {
       left: 16,
       right: 16,
       bottom: 16,
-      child:             Text(
-              series.title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: TvConstants.tvFontSizeSubtitle,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(
-                    offset: Offset(0, 2),
-                    blurRadius: 4,
-                    color: Colors.black87,
-                  ),
-                ],
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+      child: Text(
+        series.title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: TvConstants.tvFontSizeSubtitle,
+          fontWeight: FontWeight.bold,
+          shadows: [
+            Shadow(offset: Offset(0, 2), blurRadius: 4, color: Colors.black87),
+          ],
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }

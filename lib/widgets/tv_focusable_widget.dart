@@ -27,6 +27,8 @@ class _TvFocusableWidgetState extends State<TvFocusableWidget> {
   late FocusNode _focusNode;
   bool _isFocused = false;
 
+  bool get isFocused => _isFocused;
+
   @override
   void initState() {
     super.initState();
