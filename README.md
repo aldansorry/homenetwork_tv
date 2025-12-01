@@ -1,5 +1,7 @@
 # 🎬 HomeNetwork TV  
-**Self-Hosted Home Media Center for Local Offline Entertainment (Flutter TV App)**
+**Self-Hosted Home Media Center for Local Offline Entertainment (Flutter TV App)**  
+
+> 🚀 *Built by AI — crafted, optimized, and structured with the assistance of advanced AI tools.*
 
 HomeNetwork TV adalah aplikasi Flutter yang dirancang khusus untuk TV (Android TV / Set-Top Box / Mini PC).  
 Aplikasi ini berfungsi sebagai **media center offline**, memungkinkan pengguna:
@@ -36,8 +38,8 @@ Semua media di-stream dari **server Linux / Ubuntu Home Server** yang kamu host 
 ### 🎵 **3. Music Player (Background Supported)**
 - Play audio meskipun aplikasi ditutup
 - Media notification control:
-  - Play/pause
-  - Next / Previous
+  - Play/pause  
+  - Next / Previous  
 - Local playlist display
 - Volume control & repeat/shuffle mode
 - Delete song
