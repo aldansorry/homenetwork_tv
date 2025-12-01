@@ -6,8 +6,10 @@ import 'package:video_player/video_player.dart';
 import '../services/settings_service.dart';
 import '../models/movie_model.dart';
 import '../constants/app_constants.dart';
+import '../constants/tv_constants.dart';
 import '../utils/api_response_parser.dart';
 import '../utils/date_time_utils.dart';
+import '../widgets/tv_focusable_widget.dart';
 
 /// Page for playing movies/episodes from a series
 class MoviePage extends StatefulWidget {
@@ -31,6 +33,8 @@ class _MoviePageState extends State<MoviePage> {
   bool _isFullscreen = false;
   bool _showFullscreenControls = true;
   Timer? _fullscreenControlsTimer;
+  final List<FocusNode> _gridFocusNodes = [];
+  int _focusedGridIndex = 0;
 
   @override
   void initState() {
@@ -42,6 +46,10 @@ class _MoviePageState extends State<MoviePage> {
   void dispose() {
     // Cancel timer
     _fullscreenControlsTimer?.cancel();
+    // Dispose focus nodes
+    for (var node in _gridFocusNodes) {
+      node.dispose();
+    }
     // Reset system UI when disposing
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([
@@ -52,6 +60,69 @@ class _MoviePageState extends State<MoviePage> {
     ]);
     _videoController?.dispose();
     super.dispose();
+  }
+
+  void _initializeGridFocusNodes() {
+    for (var node in _gridFocusNodes) {
+      node.dispose();
+    }
+    _gridFocusNodes.clear();
+    for (int i = 0; i < _movieList.length; i++) {
+      _gridFocusNodes.add(FocusNode());
+    }
+    if (_gridFocusNodes.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _gridFocusNodes[0].requestFocus();
+      });
+    }
+  }
+
+  void _handleGridKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent && _movieList.isNotEmpty) {
+      final gridColumns = TvConstants.tvGridCrossAxisCount;
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.arrowRight:
+          if (_focusedGridIndex < _movieList.length - 1) {
+            setState(() {
+              _focusedGridIndex++;
+            });
+            _gridFocusNodes[_focusedGridIndex].requestFocus();
+          }
+          break;
+        case LogicalKeyboardKey.arrowLeft:
+          if (_focusedGridIndex > 0) {
+            setState(() {
+              _focusedGridIndex--;
+            });
+            _gridFocusNodes[_focusedGridIndex].requestFocus();
+          }
+          break;
+        case LogicalKeyboardKey.arrowDown:
+          final nextIndex = _focusedGridIndex + gridColumns;
+          if (nextIndex < _movieList.length) {
+            setState(() {
+              _focusedGridIndex = nextIndex;
+            });
+            _gridFocusNodes[_focusedGridIndex].requestFocus();
+          }
+          break;
+        case LogicalKeyboardKey.arrowUp:
+          final prevIndex = _focusedGridIndex - gridColumns;
+          if (prevIndex >= 0) {
+            setState(() {
+              _focusedGridIndex = prevIndex;
+            });
+            _gridFocusNodes[_focusedGridIndex].requestFocus();
+          }
+          break;
+        case LogicalKeyboardKey.select:
+        case LogicalKeyboardKey.enter:
+          _loadVideo(_focusedGridIndex);
+          break;
+        default:
+          break;
+      }
+    }
   }
 
   /// Load list of movies/episodes from API
@@ -87,6 +158,8 @@ class _MoviePageState extends State<MoviePage> {
               _movieList = parsedMovies;
               _isLoadingMovies = false;
             });
+
+            _initializeGridFocusNodes();
 
             // Load first video if available
             if (parsedMovies.isNotEmpty) {
@@ -284,18 +357,24 @@ class _MoviePageState extends State<MoviePage> {
       return _buildFullscreenView();
     }
 
-    return Scaffold(
-      backgroundColor: const Color(AppConstants.colorBackgroundDark),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildVideoPlayerSection(),
-            if (_isVideoInitialized && _videoController != null)
-              _buildVideoControlsSection(),
-            const SizedBox(height: 8),
-            _buildMovieListSection(),
-            const SizedBox(height: 8),
-          ],
+    return KeyboardListener(
+      focusNode: FocusNode()..requestFocus(),
+      onKeyEvent: _handleGridKeyEvent,
+      child: Scaffold(
+        backgroundColor: const Color(AppConstants.colorBackgroundDark),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(TvConstants.tvSafeAreaPadding),
+            child: Column(
+              children: [
+                _buildVideoPlayerSection(),
+                if (_isVideoInitialized && _videoController != null)
+                  _buildVideoControlsSection(),
+                const SizedBox(height: TvConstants.tvSpacingLarge),
+                Expanded(child: _buildMovieListSection()),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -540,7 +619,7 @@ class _MoviePageState extends State<MoviePage> {
     final currentMovie = _movieList[_currentMovieIndex];
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(TvConstants.tvCardPadding),
       color: const Color(AppConstants.colorCardDark),
       child: Column(
         children: [
@@ -549,14 +628,14 @@ class _MoviePageState extends State<MoviePage> {
             currentMovie.title,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: TvConstants.tvFontSizeSubtitle,
               fontWeight: FontWeight.bold,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: TvConstants.tvSpacingSmall),
 
           // Progress Bar
           if (_videoController!.value.duration > Duration.zero) ...[
@@ -720,27 +799,38 @@ class _MoviePageState extends State<MoviePage> {
         ),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Movies (${_movieList.length})',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                    Padding(
+                      padding: const EdgeInsets.all(TvConstants.tvCardPadding),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Movies (${_movieList.length})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: TvConstants.tvFontSizeSubtitle,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          TvFocusableWidget(
+                            onTap: _loadMovieList,
+                            child: Container(
+                              padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
+                              decoration: BoxDecoration(
+                                color: Color(TvConstants.tvFocusColor)
+                                    .withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.refresh,
+                                color: Colors.white,
+                                size: TvConstants.tvIconSizeLarge,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, color: Colors.white),
-                    onPressed: _loadMovieList,
-                    tooltip: 'Refresh',
-                  ),
-                ],
-              ),
-            ),
             Expanded(child: _buildMovieListContent()),
           ],
         ),
@@ -770,12 +860,12 @@ class _MoviePageState extends State<MoviePage> {
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(TvConstants.tvCardPadding),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: AppConstants.gridCrossAxisCount,
-        crossAxisSpacing: AppConstants.gridSpacing,
-        mainAxisSpacing: AppConstants.gridSpacing,
-        childAspectRatio: AppConstants.gridAspectRatio,
+        crossAxisCount: TvConstants.tvGridCrossAxisCount,
+        crossAxisSpacing: TvConstants.tvGridSpacing,
+        mainAxisSpacing: TvConstants.tvGridSpacing,
+        childAspectRatio: TvConstants.tvGridAspectRatio,
       ),
       itemCount: _movieList.length,
       itemBuilder: (context, index) {
@@ -788,24 +878,25 @@ class _MoviePageState extends State<MoviePage> {
 
   /// Build individual movie card
   Widget _buildMovieCard(MovieModel movie, int index, bool isSelected) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _loadVideo(index),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(AppConstants.colorPrimaryRed)
-                : const Color(AppConstants.colorSecondaryDark),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
+    return TvFocusableWidget(
+      focusNode: index < _gridFocusNodes.length ? _gridFocusNodes[index] : null,
+      autofocus: index == 0,
+      onTap: () => _loadVideo(index),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(AppConstants.colorPrimaryRed)
+              : const Color(AppConstants.colorSecondaryDark),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
             child: Text(
               movie.title,
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.white70,
-                fontSize: 16,
+                fontSize: TvConstants.tvFontSizeBody,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
               textAlign: TextAlign.center,

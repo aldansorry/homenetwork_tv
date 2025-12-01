@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../services/settings_service.dart';
 import '../constants/app_constants.dart';
+import '../constants/tv_constants.dart';
 import '../utils/url_validator.dart';
+import '../widgets/tv_button.dart';
 
 /// Settings page for configuring application settings
 class SettingsPage extends StatefulWidget {
@@ -145,15 +148,15 @@ class _SettingsPageState extends State<SettingsPage> {
       backgroundColor: const Color(AppConstants.colorBackgroundDark),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(TvConstants.tvSafeAreaPadding),
           child: ListView(
             children: [
               _buildTitle(),
-              const SizedBox(height: 30),
+              const SizedBox(height: TvConstants.tvSpacingXLarge),
               _buildBackendUrlSection(),
-              const SizedBox(height: 30),
+              const SizedBox(height: TvConstants.tvSpacingXLarge),
               _buildYouTubeDownloaderSection(),
-              const SizedBox(height: 20),
+              const SizedBox(height: TvConstants.tvSpacingLarge),
               _buildStatusMessage(),
             ],
           ),
@@ -167,7 +170,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return const Text(
       'Settings',
       style: TextStyle(
-        fontSize: 24,
+        fontSize: TvConstants.tvFontSizeTitle,
         fontWeight: FontWeight.bold,
         color: Colors.white,
       ),
@@ -182,52 +185,48 @@ class _SettingsPageState extends State<SettingsPage> {
         const Text(
           'Backend URL',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: TvConstants.tvFontSizeSubtitle,
             fontWeight: FontWeight.w600,
             color: Colors.white70,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: TvConstants.tvSpacingSmall),
         TextField(
           controller: _backendUrlController,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: TvConstants.tvFontSizeBody,
+          ),
           decoration: InputDecoration(
             labelText: 'Backend URL',
-            labelStyle: const TextStyle(color: Colors.white70),
+            labelStyle: const TextStyle(
+              color: Colors.white70,
+              fontSize: TvConstants.tvFontSizeBody,
+            ),
             hintText: AppConstants.defaultBackendUrl,
-            hintStyle: const TextStyle(color: Colors.white38),
+            hintStyle: const TextStyle(
+              color: Colors.white38,
+              fontSize: TvConstants.tvFontSizeBody,
+            ),
             border: const OutlineInputBorder(),
             enabledBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.white38),
+              borderSide: BorderSide(color: Colors.white38, width: 2),
             ),
             focusedBorder: const OutlineInputBorder(
               borderSide: BorderSide(
                 color: Color(AppConstants.colorPrimaryRed),
+                width: 2,
               ),
             ),
+            contentPadding: const EdgeInsets.all(TvConstants.tvSpacingMedium),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isSavingBackendUrl ? null : _saveBackendUrl,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(AppConstants.colorPrimaryRed),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: _isSavingBackendUrl
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save Backend URL'),
-          ),
+        const SizedBox(height: TvConstants.tvSpacingSmall),
+        TvButton(
+          label: 'Save Backend URL',
+          icon: Icons.save,
+          onPressed: _isSavingBackendUrl ? null : _saveBackendUrl,
+          autofocus: true,
         ),
       ],
     );
@@ -241,50 +240,42 @@ class _SettingsPageState extends State<SettingsPage> {
         const Text(
           'YouTube Downloader',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: TvConstants.tvFontSizeSubtitle,
             fontWeight: FontWeight.w600,
             color: Colors.white70,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: TvConstants.tvSpacingSmall),
         TextField(
           controller: _youtubeUrlController,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: TvConstants.tvFontSizeBody,
+          ),
           decoration: InputDecoration(
             labelText: 'Masukkan URL / YouTube ID',
-            labelStyle: const TextStyle(color: Colors.white70),
+            labelStyle: const TextStyle(
+              color: Colors.white70,
+              fontSize: TvConstants.tvFontSizeBody,
+            ),
             border: const OutlineInputBorder(),
             enabledBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.white38),
+              borderSide: BorderSide(color: Colors.white38, width: 2),
             ),
             focusedBorder: const OutlineInputBorder(
               borderSide: BorderSide(
                 color: Color(AppConstants.colorPrimaryRed),
+                width: 2,
               ),
             ),
+            contentPadding: const EdgeInsets.all(TvConstants.tvSpacingMedium),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isLoadingDownloader ? null : _downloadAudioFromYouTube,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(AppConstants.colorPrimaryRed),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: _isLoadingDownloader
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Download'),
-          ),
+        const SizedBox(height: TvConstants.tvSpacingSmall),
+        TvButton(
+          label: 'Download',
+          icon: Icons.download,
+          onPressed: _isLoadingDownloader ? null : _downloadAudioFromYouTube,
         ),
       ],
     );

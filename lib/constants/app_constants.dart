@@ -30,6 +30,9 @@ class AppConstants {
   static const int colorBackgroundDark = 0xFF0A0A0A;
   static const int colorCardDark = 0xFF1A1A1A;
   static const int colorSecondaryDark = 0xFF2A2A2A;
+  
+  // TV-specific constants (exported from TvConstants for convenience)
+  static const int tvColorFocus = 0xFFFF0000;
 
   // Audio Formats
   static const List<String> supportedAudioFormats = [

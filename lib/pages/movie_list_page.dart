@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../services/settings_service.dart';
 import '../models/movie_series_model.dart';
 import '../constants/app_constants.dart';
+import '../constants/tv_constants.dart';
 import '../utils/api_response_parser.dart';
+import '../widgets/tv_focusable_widget.dart';
 import 'movie_page.dart';
 
 /// Page displaying list of movie series
@@ -17,11 +20,65 @@ class MovieListPage extends StatefulWidget {
 class _MovieListPageState extends State<MovieListPage> {
   List<MovieSeriesModel> _movieSeriesList = [];
   bool _isLoading = false;
+  final List<FocusNode> _focusNodes = [];
+  int _focusedIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadMovieSeries();
+  }
+
+  @override
+  void dispose() {
+    for (var node in _focusNodes) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  void _initializeFocusNodes() {
+    for (var node in _focusNodes) {
+      node.dispose();
+    }
+    _focusNodes.clear();
+    for (int i = 0; i < _movieSeriesList.length; i++) {
+      _focusNodes.add(FocusNode());
+    }
+    if (_focusNodes.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _focusNodes[0].requestFocus();
+      });
+    }
+  }
+
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent && _movieSeriesList.isNotEmpty) {
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.arrowDown:
+          if (_focusedIndex < _movieSeriesList.length - 1) {
+            setState(() {
+              _focusedIndex++;
+            });
+            _focusNodes[_focusedIndex].requestFocus();
+          }
+          break;
+        case LogicalKeyboardKey.arrowUp:
+          if (_focusedIndex > 0) {
+            setState(() {
+              _focusedIndex--;
+            });
+            _focusNodes[_focusedIndex].requestFocus();
+          }
+          break;
+        case LogicalKeyboardKey.select:
+        case LogicalKeyboardKey.enter:
+          _navigateToMoviePage(_movieSeriesList[_focusedIndex].uuid);
+          break;
+        default:
+          break;
+      }
+    }
   }
 
   /// Load movie series list from API
@@ -54,6 +111,7 @@ class _MovieListPageState extends State<MovieListPage> {
               _movieSeriesList = parsedSeries;
               _isLoading = false;
             });
+            _initializeFocusNodes();
             return;
           }
         }
@@ -93,14 +151,22 @@ class _MovieListPageState extends State<MovieListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(AppConstants.colorBackgroundDark),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildMovieSeriesList(),
-          ],
+    return KeyboardListener(
+      focusNode: FocusNode()..requestFocus(),
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: const Color(AppConstants.colorBackgroundDark),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(TvConstants.tvSafeAreaPadding),
+            child: Column(
+              children: [
+                _buildHeader(),
+                const SizedBox(height: TvConstants.tvSpacingLarge),
+                Expanded(child: _buildMovieSeriesList()),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -108,26 +174,33 @@ class _MovieListPageState extends State<MovieListPage> {
 
   /// Build header section
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            'Movie Series',
-            style: TextStyle(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Movie Series',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: TvConstants.tvFontSizeTitle,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        TvFocusableWidget(
+          onTap: _loadMovieSeries,
+          child: Container(
+            padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
+            decoration: BoxDecoration(
+              color: Color(TvConstants.tvFocusColor).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.refresh,
               color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+              size: TvConstants.tvIconSizeLarge,
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _loadMovieSeries,
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -150,42 +223,44 @@ class _MovieListPageState extends State<MovieListPage> {
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TvConstants.tvSpacingMedium,
+                  ),
                   itemCount: _movieSeriesList.length,
                   itemBuilder: (context, index) {
                     final series = _movieSeriesList[index];
-                    return _buildSeriesBanner(series);
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: TvConstants.tvSpacingLarge,
+                      ),
+                      child: _buildSeriesBanner(series, index),
+                    );
                   },
                 ),
     );
   }
 
   /// Build individual series banner
-  Widget _buildSeriesBanner(MovieSeriesModel series) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _navigateToMoviePage(series.uuid),
+  Widget _buildSeriesBanner(MovieSeriesModel series, int index) {
+    return TvFocusableWidget(
+      focusNode: index < _focusNodes.length ? _focusNodes[index] : null,
+      autofocus: index == 0,
+      onTap: () => _navigateToMoviePage(series.uuid),
+      child: Container(
+        height: TvConstants.tvCardHeight,
+        decoration: BoxDecoration(
+          color: const Color(AppConstants.colorCardDark),
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 200,
-            decoration: BoxDecoration(
-              color: const Color(AppConstants.colorCardDark),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildThumbnail(series),
-                  _buildGradientOverlay(),
-                  _buildTitle(series),
-                ],
-              ),
-            ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildThumbnail(series),
+              _buildGradientOverlay(),
+              _buildTitle(series),
+            ],
           ),
         ),
       ),
@@ -259,23 +334,23 @@ class _MovieListPageState extends State<MovieListPage> {
       left: 16,
       right: 16,
       bottom: 16,
-      child: Text(
-        series.title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          shadows: [
-            Shadow(
-              offset: Offset(0, 2),
-              blurRadius: 4,
-              color: Colors.black87,
+      child:             Text(
+              series.title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: TvConstants.tvFontSizeSubtitle,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    offset: Offset(0, 2),
+                    blurRadius: 4,
+                    color: Colors.black87,
+                  ),
+                ],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
     );
   }
 }
