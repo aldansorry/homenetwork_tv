@@ -95,6 +95,18 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.escape ||
+          event.logicalKey == LogicalKeyboardKey.goBack ||
+          event.logicalKey == LogicalKeyboardKey.browserBack ||
+          event.logicalKey == LogicalKeyboardKey.backspace) {
+        Navigator.pop(context);
+        return;
+      }
+    }
+  }
+
   /// Check if input is YouTube ID (11 characters, alphanumeric + _ -)
   bool _isYouTubeId(String text) {
     final regex = RegExp(r'^[a-zA-Z0-9_-]{11}$');
@@ -145,21 +157,25 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(AppConstants.colorBackgroundDark),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(TvConstants.tvSafeAreaPadding),
-          child: ListView(
-            children: [
-              _buildTitle(),
-              const SizedBox(height: TvConstants.tvSpacingXLarge),
-              _buildBackendUrlSection(),
-              const SizedBox(height: TvConstants.tvSpacingXLarge),
-              _buildYouTubeDownloaderSection(),
-              const SizedBox(height: TvConstants.tvSpacingLarge),
-              _buildStatusMessage(),
-            ],
+    return KeyboardListener(
+      focusNode: FocusNode()..requestFocus(),
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: const Color(AppConstants.colorBackgroundDark),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(TvConstants.tvSafeAreaPadding),
+            child: ListView(
+              children: [
+                _buildTitle(),
+                const SizedBox(height: TvConstants.tvSpacingXLarge),
+                _buildBackendUrlSection(),
+                const SizedBox(height: TvConstants.tvSpacingXLarge),
+                _buildYouTubeDownloaderSection(),
+                const SizedBox(height: TvConstants.tvSpacingLarge),
+                _buildStatusMessage(),
+              ],
+            ),
           ),
         ),
       ),

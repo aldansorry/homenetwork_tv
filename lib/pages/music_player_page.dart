@@ -494,8 +494,15 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
       );
     }
 
-    final currentSongName = getAudioFileName(songs[currentIndex]);
+    return KeyboardListener(
+      focusNode: FocusNode()..requestFocus(),
+      onKeyEvent: _handleKeyEvent,
+      child: _buildMusicScaffold(),
+    );
+  }
 
+  Widget _buildMusicScaffold() {
+    final currentSongName = getAudioFileName(songs[currentIndex]);
     return Scaffold(
       backgroundColor: const Color(AppConstants.colorBackgroundDark),
       body: SafeArea(
