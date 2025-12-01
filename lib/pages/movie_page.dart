@@ -36,6 +36,7 @@ class _MoviePageState extends State<MoviePage> {
   final List<FocusNode> _gridFocusNodes = [];
   final ScrollController _gridScrollController = ScrollController();
   int _focusedGridIndex = 0;
+  bool _initialLoad = true;
 
   @override
   void initState() {
@@ -80,53 +81,62 @@ class _MoviePageState extends State<MoviePage> {
   }
 
   void _handleGridKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent && _movieList.isNotEmpty) {
-      final gridColumns = TvConstants.tvGridCrossAxisCount;
-      switch (event.logicalKey) {
-        case LogicalKeyboardKey.arrowRight:
-          if (_focusedGridIndex < _movieList.length - 1) {
-            setState(() {
-              _focusedGridIndex++;
-            });
-            _gridFocusNodes[_focusedGridIndex].requestFocus();
-            _scrollToGridItem(_focusedGridIndex);
-          }
-          break;
-        case LogicalKeyboardKey.arrowLeft:
-          if (_focusedGridIndex > 0) {
-            setState(() {
-              _focusedGridIndex--;
-            });
-            _gridFocusNodes[_focusedGridIndex].requestFocus();
-            _scrollToGridItem(_focusedGridIndex);
-          }
-          break;
-        case LogicalKeyboardKey.arrowDown:
-          final nextIndex = _focusedGridIndex + gridColumns;
-          if (nextIndex < _movieList.length) {
-            setState(() {
-              _focusedGridIndex = nextIndex;
-            });
-            _gridFocusNodes[_focusedGridIndex].requestFocus();
-            _scrollToGridItem(_focusedGridIndex);
-          }
-          break;
-        case LogicalKeyboardKey.arrowUp:
-          final prevIndex = _focusedGridIndex - gridColumns;
-          if (prevIndex >= 0) {
-            setState(() {
-              _focusedGridIndex = prevIndex;
-            });
-            _gridFocusNodes[_focusedGridIndex].requestFocus();
-            _scrollToGridItem(_focusedGridIndex);
-          }
-          break;
-        case LogicalKeyboardKey.select:
-        case LogicalKeyboardKey.enter:
-          _loadVideo(_focusedGridIndex);
-          break;
-        default:
-          break;
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.escape ||
+          event.logicalKey == LogicalKeyboardKey.goBack ||
+          event.logicalKey == LogicalKeyboardKey.browserBack ||
+          event.logicalKey == LogicalKeyboardKey.backspace) {
+        Navigator.pop(context);
+        return;
+      }
+      if (_movieList.isNotEmpty) {
+        final gridColumns = TvConstants.tvGridCrossAxisCount;
+        switch (event.logicalKey) {
+          case LogicalKeyboardKey.arrowRight:
+            if (_focusedGridIndex < _movieList.length - 1) {
+              setState(() {
+                _focusedGridIndex++;
+              });
+              _gridFocusNodes[_focusedGridIndex].requestFocus();
+              _scrollToGridItem(_focusedGridIndex);
+            }
+            break;
+          case LogicalKeyboardKey.arrowLeft:
+            if (_focusedGridIndex > 0) {
+              setState(() {
+                _focusedGridIndex--;
+              });
+              _gridFocusNodes[_focusedGridIndex].requestFocus();
+              _scrollToGridItem(_focusedGridIndex);
+            }
+            break;
+          case LogicalKeyboardKey.arrowDown:
+            final nextIndex = _focusedGridIndex + gridColumns;
+            if (nextIndex < _movieList.length) {
+              setState(() {
+                _focusedGridIndex = nextIndex;
+              });
+              _gridFocusNodes[_focusedGridIndex].requestFocus();
+              _scrollToGridItem(_focusedGridIndex);
+            }
+            break;
+          case LogicalKeyboardKey.arrowUp:
+            final prevIndex = _focusedGridIndex - gridColumns;
+            if (prevIndex >= 0) {
+              setState(() {
+                _focusedGridIndex = prevIndex;
+              });
+              _gridFocusNodes[_focusedGridIndex].requestFocus();
+              _scrollToGridItem(_focusedGridIndex);
+            }
+            break;
+          case LogicalKeyboardKey.select:
+          case LogicalKeyboardKey.enter:
+            _playEpisodeAndEnterFullscreen(_focusedGridIndex);
+            break;
+          default:
+            break;
+        }
       }
     }
   }
@@ -147,6 +157,19 @@ class _MoviePageState extends State<MoviePage> {
 
     // Tampilkan control sebentar
     _showFullscreenControlsAndReset();
+  }
+
+  Future<void> _playEpisodeAndEnterFullscreen(int index) async {
+    await _loadVideo(index, autoplay: true);
+    await _videoController?.play();
+
+    setState(() => _isFullscreen = true);
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
   }
 
   /// Load list of movies/episodes from API
@@ -187,7 +210,8 @@ class _MoviePageState extends State<MoviePage> {
 
             // Load first video if available
             if (parsedMovies.isNotEmpty) {
-              _loadVideo(0);
+              _loadVideo(0, autoplay: false);
+              _initialLoad = false;
             }
             return;
           }
@@ -214,7 +238,7 @@ class _MoviePageState extends State<MoviePage> {
   }
 
   /// Load and initialize video player for selected movie
-  Future<void> _loadVideo(int movieIndex) async {
+  Future<void> _loadVideo(int movieIndex, {bool autoplay = true}) async {
     if (movieIndex < 0 || movieIndex >= _movieList.length) return;
 
     // Dispose previous controller
@@ -275,7 +299,7 @@ class _MoviePageState extends State<MoviePage> {
         });
 
         // Auto play if enabled
-        if (_isAutoPlayEnabled) {
+        if (autoplay && _isAutoPlayEnabled) {
           await _videoController!.play();
           setState(() {
             _isVideoPlaying = true;
@@ -379,7 +403,7 @@ class _MoviePageState extends State<MoviePage> {
   }
 
   void _scrollToGridItem(int index) {
-    final itemExtent = 275.0; // tinggi + spacing movie card, sesuaikan
+    final itemExtent = 115.0; // tinggi + spacing movie card, sesuaikan
     final offset = (index ~/ TvConstants.tvGridCrossAxisCount) * itemExtent;
 
     _gridScrollController.animateTo(
@@ -404,13 +428,7 @@ class _MoviePageState extends State<MoviePage> {
           child: Padding(
             padding: const EdgeInsets.all(TvConstants.tvSafeAreaPadding),
             child: Column(
-              children: [
-                _buildVideoPlayerSection(),
-                if (_isVideoInitialized && _videoController != null)
-                  _buildVideoControlsSection(),
-                const SizedBox(height: TvConstants.tvSpacingLarge),
-                Expanded(child: _buildMovieListSection()),
-              ],
+              children: [Expanded(child: _buildMovieListSection())],
             ),
           ),
         ),
@@ -521,16 +539,25 @@ class _MoviePageState extends State<MoviePage> {
                                 if (_videoController!.value.duration >
                                     Duration.zero) ...[
                                   GestureDetector(
+                                    behavior: HitTestBehavior
+                                        .translucent, // penting: area klik meluas
                                     onTap: _showFullscreenControlsAndReset,
-                                    child: VideoProgressIndicator(
-                                      _videoController!,
-                                      allowScrubbing: true,
-                                      colors: const VideoProgressColors(
-                                        playedColor: Color(
-                                          AppConstants.colorPrimaryRed,
+                                    onHorizontalDragUpdate: (_) =>
+                                        _showFullscreenControlsAndReset(),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ), // area klik 32px extra
+                                      child: VideoProgressIndicator(
+                                        _videoController!,
+                                        allowScrubbing: true,
+                                        colors: const VideoProgressColors(
+                                          playedColor: Color(
+                                            AppConstants.colorPrimaryRed,
+                                          ),
+                                          bufferedColor: Colors.white24,
+                                          backgroundColor: Colors.white12,
                                         ),
-                                        bufferedColor: Colors.white24,
-                                        backgroundColor: Colors.white12,
                                       ),
                                     ),
                                   ),
@@ -604,12 +631,19 @@ class _MoviePageState extends State<MoviePage> {
 
                                     // VOLUME DOWN
                                     const Icon(
-                                      Icons.volume_down,
+                                      Icons.volume_up,
                                       color: Colors.white70,
                                       size: 22,
                                     ),
                                     const SizedBox(width: 10),
-
+                                    Text(
+                                      "${(_volumeLevel * 100).toStringAsFixed(0)}%",
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
                                     // SLIDER
                                     SizedBox(
                                       width: 200,
@@ -637,24 +671,6 @@ class _MoviePageState extends State<MoviePage> {
                                             _showFullscreenControlsAndReset();
                                           },
                                         ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-
-                                    // VOLUME UP
-                                    const Icon(
-                                      Icons.volume_up,
-                                      color: Colors.white70,
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 10),
-
-                                    // VOLUME %
-                                    Text(
-                                      "${(_volumeLevel * 100).toStringAsFixed(0)}%",
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 14,
                                       ),
                                     ),
                                     const SizedBox(width: 20),
@@ -1027,7 +1043,16 @@ class _MoviePageState extends State<MoviePage> {
     return TvFocusableWidget(
       focusNode: index < _gridFocusNodes.length ? _gridFocusNodes[index] : null,
       autofocus: index == 0,
-      onTap: () => _loadVideo(index),
+      onTap: () async {
+        await _loadVideo(index);
+        await _videoController?.play();
+        setState(() => _isFullscreen = true);
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      },
       child: Container(
         decoration: BoxDecoration(
           color: isSelected
@@ -1043,7 +1068,7 @@ class _MoviePageState extends State<MoviePage> {
         ),
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
+            padding: const EdgeInsets.all(0),
             child: Text(
               movie.title,
               style: TextStyle(

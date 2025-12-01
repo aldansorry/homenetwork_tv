@@ -77,12 +77,44 @@ class _MainMenuState extends State<MainMenu> {
           break;
         case LogicalKeyboardKey.select:
         case LogicalKeyboardKey.enter:
-          _onItemSelected(_selectedIndex);
+          _navigateToPage(_selectedIndex);
           break;
         default:
           break;
       }
     }
+  }
+
+  void _navigateToPage(int index) {
+    if (index == 0) {
+      // Tetap di Home (sidebar tetap tampil)
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+
+    // Simpan index untuk highlight tetapi buka halaman baru via Navigator
+    setState(() => _selectedIndex = index);
+
+    Widget page;
+    switch (index) {
+      case 1:
+        page = const MovieListPage();
+        break;
+      case 2:
+        page = const MusicPlayerPage();
+        break;
+      case 3:
+        page = const SettingsPage();
+        break;
+      default:
+        page = const HomePage();
+    }
+
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page)).then((_) {
+      // Setelah user BACK → kembali ke Home dan sidebar muncul lagi
+      setState(() => _selectedIndex = 0);
+      _menuFocusNodes[0].requestFocus();
+    });
   }
 
   @override
@@ -95,87 +127,97 @@ class _MainMenuState extends State<MainMenu> {
         body: Row(
           children: [
             // TV-optimized sidebar navigation
-            Container(
-              width: 300,
-              color: const Color(AppConstants.colorCardDark),
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(TvConstants.tvSpacingLarge),
-                      child: const Text(
-                        'HomeNetwork',
-                        style: TextStyle(
-                          fontSize: TvConstants.tvFontSizeTitle,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+            if (_selectedIndex == 0)
+              Container(
+                width: 300,
+                color: const Color(AppConstants.colorCardDark),
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(
+                          TvConstants.tvSpacingLarge,
+                        ),
+                        child: const Text(
+                          'HomeNetwork',
+                          style: TextStyle(
+                            fontSize: TvConstants.tvFontSizeTitle,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                    ),
-                    const Divider(color: Colors.white24),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(TvConstants.tvSpacingMedium),
-                        itemCount: _menuItems.length,
-                        itemBuilder: (context, index) {
-                          final item = _menuItems[index];
-                          final isSelected = index == _selectedIndex;
-                          return Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: TvConstants.tvSpacingMedium,
-                            ),
-                            child: TvFocusableWidget(
-                              focusNode: _menuFocusNodes[index],
-                              autofocus: index == 0,
-                              onTap: () => _onItemSelected(index),
-                              child: Container(
-                                padding: const EdgeInsets.all(TvConstants.tvSpacingMedium),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? Color(TvConstants.tvFocusColor)
-                                          .withOpacity(0.3)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      item['icon'] as IconData,
-                                      size: TvConstants.tvIconSizeLarge,
-                                      color: isSelected
-                                          ? Color(TvConstants.tvFocusColor)
-                                          : Colors.white70,
-                                    ),
-                                    const SizedBox(width: TvConstants.tvSpacingMedium),
-                                    Text(
-                                      item['label'] as String,
-                                      style: TextStyle(
-                                        fontSize: TvConstants.tvFontSizeBody,
-                                        fontWeight: isSelected
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
+                      const Divider(color: Colors.white24),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(
+                            TvConstants.tvSpacingMedium,
+                          ),
+                          itemCount: _menuItems.length,
+                          itemBuilder: (context, index) {
+                            final item = _menuItems[index];
+                            final isSelected = index == _selectedIndex;
+                            return Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: TvConstants.tvSpacingMedium,
+                              ),
+                              child: TvFocusableWidget(
+                                focusNode: _menuFocusNodes[index],
+                                autofocus: _selectedIndex == 0 && index == 0,
+                                onTap: _selectedIndex == 0
+                                    ? () => _navigateToPage(index)
+                                    : null,
+                                child: Container(
+                                  padding: const EdgeInsets.all(
+                                    TvConstants.tvSpacingMedium,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? Color(
+                                            TvConstants.tvFocusColor,
+                                          ).withOpacity(0.3)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        item['icon'] as IconData,
+                                        size: TvConstants.tvIconSizeLarge,
                                         color: isSelected
-                                            ? Colors.white
+                                            ? Color(TvConstants.tvFocusColor)
                                             : Colors.white70,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(
+                                        width: TvConstants.tvSpacingMedium,
+                                      ),
+                                      Text(
+                                        item['label'] as String,
+                                        style: TextStyle(
+                                          fontSize: TvConstants.tvFontSizeBody,
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.white70,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
             // Main content area
-            Expanded(
-              child: _pages[_selectedIndex],
-            ),
+            Expanded(child: _pages[_selectedIndex]),
           ],
         ),
       ),

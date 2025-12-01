@@ -63,10 +63,22 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
     super.dispose();
   }
 
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.escape ||
+          event.logicalKey == LogicalKeyboardKey.goBack ||
+          event.logicalKey == LogicalKeyboardKey.browserBack ||
+          event.logicalKey == LogicalKeyboardKey.backspace) {
+        Navigator.pop(context);
+        return;
+      }
+    }
+  }
+
   Future<void> initializeAudio() async {
     // Check if audio is already cached
     final isAudioCached = await AudioService.isAudioCached();
-    
+
     if (!isAudioCached) {
       if (mounted) {
         setState(() {
@@ -74,10 +86,10 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
           _loadingMessage = 'Downloading audio files...';
         });
       }
-      
+
       // Download and extract audio
       final success = await AudioService.downloadAndExtractAudio();
-      
+
       if (!success) {
         if (mounted) {
           setState(() {
@@ -87,17 +99,17 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
         }
         return;
       }
-      
+
       if (mounted) {
         setState(() {
           _loadingMessage = 'Loading audio files...';
         });
       }
     }
-    
+
     // Load audio files
     await loadSongs();
-    
+
     if (mounted) {
       setState(() {
         _isLoadingAudio = false;
@@ -107,19 +119,19 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
 
   Future<void> loadSongs() async {
     final audioFiles = await AudioService.loadAudioFiles();
-    
+
     if (mounted) {
       setState(() {
         songs = audioFiles;
       });
     }
-    
+
     print('Loaded ${songs.length} audio files');
   }
 
   Future<void> refreshPlaylist() async {
     if (_isRefreshing) return;
-    
+
     setState(() {
       _isRefreshing = true;
     });
@@ -127,7 +139,7 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
     try {
       // Stop current playback
       await audioPlayer.stop();
-      
+
       // Clear current playlist
       setState(() {
         songs = [];
@@ -137,11 +149,11 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
 
       // Download fresh audio from backend
       final success = await AudioService.downloadAndExtractAudio();
-      
+
       if (success) {
         // Load new songs
         await loadSongs();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -190,7 +202,9 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Song'),
-        content: Text('Are you sure you want to delete "$songName"? This action cannot be undone.'),
+        content: Text(
+          'Are you sure you want to delete "$songName"? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -268,13 +282,13 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
 
   Future<void> play() async {
     if (songs.isEmpty) return;
-    
+
     try {
       await audioPlayer.stop();
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       final currentSong = songs[currentIndex];
-      
+
       if (identical(0, 0.0)) {
         // Web platform - prefer blob URL (better browser support), fallback to bytes
         try {
@@ -285,7 +299,9 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
           } else {
             final audioBytes = AudioService.getAudioBytes(currentSong);
             if (audioBytes != null) {
-              await audioPlayer.play(BytesSource(Uint8List.fromList(audioBytes)));
+              await audioPlayer.play(
+                BytesSource(Uint8List.fromList(audioBytes)),
+              );
               print('Playing from memory bytes: $currentSong');
             } else {
               print('Audio bytes not found: $currentSong');
@@ -302,7 +318,7 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
         // Native platform - play from local storage
         await audioPlayer.play(DeviceFileSource(currentSong));
       }
-      
+
       await audioPlayer.setVolume(_volume);
       if (mounted) {
         setState(() => isPlaying = true);
@@ -321,7 +337,7 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
 
   Future<void> nextSong() async {
     if (songs.isEmpty) return;
-    
+
     if (mounted) {
       setState(() {
         if (_isShuffle) {
@@ -336,7 +352,7 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
 
   Future<void> previousSong() async {
     if (songs.isEmpty) return;
-    
+
     if (mounted) {
       setState(() {
         currentIndex = (currentIndex - 1 + songs.length) % songs.length;
@@ -404,7 +420,13 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
   }
 
   String getAudioFileName(String filePath) {
-    return filePath.split('/').last.replaceAll(RegExp(r'\.(mp3|m4a|webm|weba|wav|ogg)$', caseSensitive: false), '');
+    return filePath
+        .split('/')
+        .last
+        .replaceAll(
+          RegExp(r'\.(mp3|m4a|webm|weba|wav|ogg)$', caseSensitive: false),
+          '',
+        );
   }
 
   void selectSong(int index) {
@@ -460,7 +482,10 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF0000),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ],
@@ -487,20 +512,56 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Your Library',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: TvConstants.tvFontSizeTitle,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        // 🔙 Tombol Home
+                        TvFocusableWidget(
+                          onTap: () {
+                            Navigator.pop(context); // kembali ke Home
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(
+                              TvConstants.tvSpacingSmall,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color(
+                                TvConstants.tvFocusColor,
+                              ).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.home,
+                              color: Colors.white,
+                              size: TvConstants.tvIconSizeLarge,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 16),
+
+                        // 🔡 Title
+                        const Text(
+                          'Your Library',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: TvConstants.tvFontSizeTitle,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
+
+                    // 🔄 Refresh button (tetap di kanan)
                     TvFocusableWidget(
                       onTap: _isRefreshing ? null : refreshPlaylist,
                       child: Container(
-                        padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
+                        padding: const EdgeInsets.all(
+                          TvConstants.tvSpacingSmall,
+                        ),
                         decoration: BoxDecoration(
-                          color: Color(TvConstants.tvFocusColor).withOpacity(0.2),
+                          color: Color(
+                            TvConstants.tvFocusColor,
+                          ).withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: _isRefreshing
@@ -509,7 +570,9 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
                                 height: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             : const Icon(
@@ -524,368 +587,423 @@ class _MusicPlayerPageState extends State<MusicPlayerPage> {
               ),
               const SizedBox(height: TvConstants.tvSpacingMedium),
               // Now Playing Section (YouTube Music style)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: TvConstants.tvSpacingMedium),
-              padding: const EdgeInsets.all(TvConstants.tvCardPadding),
-              decoration: BoxDecoration(
-                color: const Color(AppConstants.colorCardDark),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  // Song Title
-                  Text(
-                    currentSongName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: TvConstants.tvFontSizeSubtitle,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: TvConstants.tvSpacingSmall),
-                  
-                  // Progress Bar
-                  if (_duration.inMilliseconds > 0) ...[
-                    SliderTheme(
-                      data: SliderThemeData(
-                        trackHeight: 4.0,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                        activeTrackColor: const Color(0xFFFF0000),
-                        inactiveTrackColor: Colors.white24,
-                        thumbColor: const Color(0xFFFF0000),
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-                      ),
-                      child: Slider(
-                        value: _currentPosition.inMilliseconds.toDouble(),
-                        max: _duration.inMilliseconds.toDouble(),
-                        onChanged: (value) async {
-                          await audioPlayer.seek(Duration(milliseconds: value.toInt()));
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            formatDuration(_currentPosition),
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                          Text(
-                            formatDuration(_duration),
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  
-                  // Player Controls: prev, play, next, shuffle, repeat, volume
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Previous
-                      TvFocusableWidget(
-                        onTap: previousSong,
-                        child: SizedBox(
-                          width: 64,
-                          height: 64,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: previousSong,
-                              borderRadius: BorderRadius.circular(32),
-                              child: const Icon(
-                                Icons.skip_previous,
-                                size: TvConstants.tvIconSizeLarge,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingSmall),
-                      // Play/Pause
-                      TvFocusableWidget(
-                        onTap: isPlaying ? pause : play,
-                        child: Material(
-                          color: const Color(AppConstants.colorPrimaryRed),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            onTap: isPlaying ? pause : play,
-                            customBorder: const CircleBorder(),
-                            child: Container(
-                              width: 80,
-                              height: 80,
-                              alignment: Alignment.center,
-                              child: Icon(
-                                isPlaying ? Icons.pause : Icons.play_arrow,
-                                size: 56,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingSmall),
-                      // Next
-                      TvFocusableWidget(
-                        onTap: nextSong,
-                        child: SizedBox(
-                          width: 64,
-                          height: 64,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: nextSong,
-                              borderRadius: BorderRadius.circular(32),
-                              child: const Icon(
-                                Icons.skip_next,
-                                size: TvConstants.tvIconSizeLarge,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingMedium),
-                      // Shuffle
-                      TvFocusableWidget(
-                        onTap: toggleShuffle,
-                        child: SizedBox(
-                          width: 64,
-                          height: 64,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: toggleShuffle,
-                              borderRadius: BorderRadius.circular(32),
-                              child: Icon(
-                                Icons.shuffle,
-                                color: _isShuffle
-                                    ? const Color(AppConstants.colorPrimaryRed)
-                                    : Colors.white70,
-                                size: TvConstants.tvIconSize,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingSmall),
-                      // Repeat
-                      TvFocusableWidget(
-                        onTap: toggleRepeat,
-                        child: SizedBox(
-                          width: 64,
-                          height: 64,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: toggleRepeat,
-                              borderRadius: BorderRadius.circular(32),
-                              child: Icon(
-                                isRepeat ? Icons.repeat : Icons.repeat_one,
-                                color: isRepeat
-                                    ? const Color(AppConstants.colorPrimaryRed)
-                                    : Colors.white70,
-                                size: TvConstants.tvIconSize,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingMedium),
-                      // Volume Control
-                      SizedBox(
-                        height: 64,
-                        child: Center(
-                          child: const Icon(
-                            Icons.volume_down,
-                            size: TvConstants.tvIconSize,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingSmall),
-                      SizedBox(
-                        height: 64,
-                        width: 150,
-                        child: Center(
-                          child: SliderTheme(
-                            data: SliderThemeData(
-                              trackHeight: 4.0,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                              activeTrackColor: const Color(AppConstants.colorPrimaryRed),
-                              inactiveTrackColor: Colors.white24,
-                              thumbColor: const Color(AppConstants.colorPrimaryRed),
-                            ),
-                            child: Slider(
-                              value: _volume,
-                              min: 0.0,
-                              max: 1.0,
-                              onChanged: setVolume,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingSmall),
-                      SizedBox(
-                        height: 64,
-                        child: Center(
-                          child: const Icon(
-                            Icons.volume_up,
-                            size: TvConstants.tvIconSize,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: TvConstants.tvSpacingSmall),
-                      SizedBox(
-                        height: 64,
-                        child: Center(
-                          child: Text(
-                            '${(_volume * 100).toStringAsFixed(0)}%',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: TvConstants.tvFontSizeSmall,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: TvConstants.tvSpacingMedium),
-            // Playlist Section
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: TvConstants.tvSpacingMedium),
+              Container(
+                margin: const EdgeInsets.symmetric(
+                  horizontal: TvConstants.tvSpacingMedium,
+                ),
+                padding: const EdgeInsets.all(TvConstants.tvCardPadding),
                 decoration: BoxDecoration(
                   color: const Color(AppConstants.colorCardDark),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(TvConstants.tvCardPadding),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Playlist (${songs.length})',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: TvConstants.tvFontSizeSubtitle,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                    // Song Title
+                    Text(
+                      currentSongName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: TvConstants.tvFontSizeSubtitle,
+                        fontWeight: FontWeight.bold,
                       ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.only(bottom: TvConstants.tvCardPadding),
-                        itemCount: songs.length,
-                        itemBuilder: (context, index) {
-                          bool isSelected = index == currentIndex;
-                          final fileName = getAudioFileName(songs[index]);
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: TvConstants.tvSpacingMedium,
-                              vertical: TvConstants.tvSpacingSmall,
+                    const SizedBox(height: TvConstants.tvSpacingSmall),
+
+                    // Progress Bar
+                    if (_duration.inMilliseconds > 0) ...[
+                      SliderTheme(
+                        data: SliderThemeData(
+                          trackHeight: 4.0,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 8,
+                          ),
+                          activeTrackColor: const Color(0xFFFF0000),
+                          inactiveTrackColor: Colors.white24,
+                          thumbColor: const Color(0xFFFF0000),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 16,
+                          ),
+                        ),
+                        child: Slider(
+                          value: _currentPosition.inMilliseconds.toDouble(),
+                          max: _duration.inMilliseconds.toDouble(),
+                          onChanged: (value) async {
+                            await audioPlayer.seek(
+                              Duration(milliseconds: value.toInt()),
+                            );
+                          },
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              formatDuration(_currentPosition),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
-                            child: TvFocusableWidget(
-                              onTap: () => selectSong(index),
-                              child: Container(
-                                padding: const EdgeInsets.all(TvConstants.tvSpacingMedium),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? const Color(AppConstants.colorPrimaryRed)
-                                          .withOpacity(0.2)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 64,
-                                      height: 64,
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? const Color(AppConstants.colorPrimaryRed)
-                                            : const Color(AppConstants.colorSecondaryDark),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        isSelected ? Icons.equalizer : Icons.music_note,
-                                        color: Colors.white,
-                                        size: TvConstants.tvIconSize,
-                                      ),
-                                    ),
-                                    const SizedBox(width: TvConstants.tvSpacingMedium),
-                                    Expanded(
-                                      child: Text(
-                                        fileName,
-                                        style: TextStyle(
-                                          color: isSelected ? Colors.white : Colors.white70,
-                                          fontSize: TvConstants.tvFontSizeBody,
-                                          fontWeight: isSelected
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (isSelected)
-                                      const Padding(
-                                        padding: EdgeInsets.only(right: TvConstants.tvSpacingSmall),
-                                        child: Icon(
-                                          Icons.volume_up,
-                                          color: Color(AppConstants.colorPrimaryRed),
-                                          size: TvConstants.tvIconSize,
-                                        ),
-                                      ),
-                                    TvFocusableWidget(
-                                      onTap: () => deleteSong(index),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Icon(
-                                          Icons.delete_outline,
-                                          color: Colors.white70,
-                                          size: TvConstants.tvIconSize,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                            Text(
+                              formatDuration(_duration),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+
+                    // Player Controls: prev, play, next, shuffle, repeat, volume
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Previous
+                        TvFocusableWidget(
+                          onTap: previousSong,
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: previousSong,
+                                borderRadius: BorderRadius.circular(32),
+                                child: const Icon(
+                                  Icons.skip_previous,
+                                  size: TvConstants.tvIconSizeLarge,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingSmall),
+                        // Play/Pause
+                        TvFocusableWidget(
+                          onTap: isPlaying ? pause : play,
+                          child: Material(
+                            color: const Color(AppConstants.colorPrimaryRed),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              onTap: isPlaying ? pause : play,
+                              customBorder: const CircleBorder(),
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  isPlaying ? Icons.pause : Icons.play_arrow,
+                                  size: 56,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingSmall),
+                        // Next
+                        TvFocusableWidget(
+                          onTap: nextSong,
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: nextSong,
+                                borderRadius: BorderRadius.circular(32),
+                                child: const Icon(
+                                  Icons.skip_next,
+                                  size: TvConstants.tvIconSizeLarge,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingMedium),
+                        // Shuffle
+                        TvFocusableWidget(
+                          onTap: toggleShuffle,
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: toggleShuffle,
+                                borderRadius: BorderRadius.circular(32),
+                                child: Icon(
+                                  Icons.shuffle,
+                                  color: _isShuffle
+                                      ? const Color(
+                                          AppConstants.colorPrimaryRed,
+                                        )
+                                      : Colors.white70,
+                                  size: TvConstants.tvIconSize,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingSmall),
+                        // Repeat
+                        TvFocusableWidget(
+                          onTap: toggleRepeat,
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: toggleRepeat,
+                                borderRadius: BorderRadius.circular(32),
+                                child: Icon(
+                                  isRepeat ? Icons.repeat : Icons.repeat_one,
+                                  color: isRepeat
+                                      ? const Color(
+                                          AppConstants.colorPrimaryRed,
+                                        )
+                                      : Colors.white70,
+                                  size: TvConstants.tvIconSize,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingMedium),
+                        // Volume Control
+                        SizedBox(
+                          height: 64,
+                          child: Center(
+                            child: const Icon(
+                              Icons.volume_down,
+                              size: TvConstants.tvIconSize,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingSmall),
+                        SizedBox(
+                          height: 64,
+                          width: 150,
+                          child: Center(
+                            child: SliderTheme(
+                              data: SliderThemeData(
+                                trackHeight: 4.0,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 8,
+                                ),
+                                activeTrackColor: const Color(
+                                  AppConstants.colorPrimaryRed,
+                                ),
+                                inactiveTrackColor: Colors.white24,
+                                thumbColor: const Color(
+                                  AppConstants.colorPrimaryRed,
+                                ),
+                              ),
+                              child: Slider(
+                                value: _volume,
+                                min: 0.0,
+                                max: 1.0,
+                                onChanged: setVolume,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingSmall),
+                        SizedBox(
+                          height: 64,
+                          child: Center(
+                            child: const Icon(
+                              Icons.volume_up,
+                              size: TvConstants.tvIconSize,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: TvConstants.tvSpacingSmall),
+                        SizedBox(
+                          height: 64,
+                          child: Center(
+                            child: Text(
+                              '${(_volume * 100).toStringAsFixed(0)}%',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: TvConstants.tvFontSizeSmall,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: TvConstants.tvSpacingMedium),
-          ],
+              const SizedBox(height: TvConstants.tvSpacingMedium),
+              // Playlist Section
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: TvConstants.tvSpacingMedium,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(AppConstants.colorCardDark),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(
+                          TvConstants.tvCardPadding,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Playlist (${songs.length})',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: TvConstants.tvFontSizeSubtitle,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.only(
+                            bottom: TvConstants.tvCardPadding,
+                          ),
+                          itemCount: songs.length,
+                          itemBuilder: (context, index) {
+                            bool isSelected = index == currentIndex;
+                            final fileName = getAudioFileName(songs[index]);
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: TvConstants.tvSpacingMedium,
+                                vertical: TvConstants.tvSpacingSmall,
+                              ),
+                              child: TvFocusableWidget(
+                                onTap: () => selectSong(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(
+                                    TvConstants.tvSpacingMedium,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? const Color(
+                                            AppConstants.colorPrimaryRed,
+                                          ).withOpacity(0.2)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 64,
+                                        height: 64,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? const Color(
+                                                  AppConstants.colorPrimaryRed,
+                                                )
+                                              : const Color(
+                                                  AppConstants
+                                                      .colorSecondaryDark,
+                                                ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          isSelected
+                                              ? Icons.equalizer
+                                              : Icons.music_note,
+                                          color: Colors.white,
+                                          size: TvConstants.tvIconSize,
+                                        ),
+                                      ),
+                                      const SizedBox(
+                                        width: TvConstants.tvSpacingMedium,
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          fileName,
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Colors.white70,
+                                            fontSize:
+                                                TvConstants.tvFontSizeBody,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w600
+                                                : FontWeight.normal,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Padding(
+                                          padding: EdgeInsets.only(
+                                            right: TvConstants.tvSpacingSmall,
+                                          ),
+                                          child: Icon(
+                                            Icons.volume_up,
+                                            color: Color(
+                                              AppConstants.colorPrimaryRed,
+                                            ),
+                                            size: TvConstants.tvIconSize,
+                                          ),
+                                        ),
+                                      TvFocusableWidget(
+                                        onTap: () => deleteSong(index),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(
+                                            TvConstants.tvSpacingSmall,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.white70,
+                                            size: TvConstants.tvIconSize,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: TvConstants.tvSpacingMedium),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

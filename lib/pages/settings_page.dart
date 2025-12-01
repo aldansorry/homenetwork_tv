@@ -6,6 +6,7 @@ import '../constants/app_constants.dart';
 import '../constants/tv_constants.dart';
 import '../utils/url_validator.dart';
 import '../widgets/tv_button.dart';
+import '../widgets/tv_focusable_widget.dart';
 
 /// Settings page for configuring application settings
 class SettingsPage extends StatefulWidget {
@@ -167,13 +168,39 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// Build page title
   Widget _buildTitle() {
-    return const Text(
-      'Settings',
-      style: TextStyle(
-        fontSize: TvConstants.tvFontSizeTitle,
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-      ),
+    return Row(
+      children: [
+        // 🔙 Tombol Home
+        TvFocusableWidget(
+          onTap: () {
+            Navigator.pop(context); // kembali ke Home
+          },
+          child: Container(
+            padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
+            decoration: BoxDecoration(
+              color: Color(TvConstants.tvFocusColor).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.home,
+              color: Colors.white,
+              size: TvConstants.tvIconSizeLarge,
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 16),
+
+        // 🔡 Title Settings
+        const Text(
+          'Settings',
+          style: TextStyle(
+            fontSize: TvConstants.tvFontSizeTitle,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 

@@ -9,7 +9,7 @@ class TvConstants {
   static const double tvFontSizeSmall = 16.0;
 
   // Spacing for TV
-  static const double tvSpacingSmall = 16.0;
+  static const double tvSpacingSmall = 1.0;
   static const double tvSpacingMedium = 24.0;
   static const double tvSpacingLarge = 32.0;
   static const double tvSpacingXLarge = 48.0;
@@ -25,9 +25,9 @@ class TvConstants {
   static const double tvCardPadding = 24.0;
 
   // Grid layout for TV
-  static const int tvGridCrossAxisCount = 6; // Fewer items per row for TV
-  static const double tvGridSpacing = 24.0;
-  static const double tvGridAspectRatio = 1.5;
+  static const int tvGridCrossAxisCount = 8; // Fewer items per row for TV
+  static const double tvGridSpacing = 12.0;
+  static const double tvGridAspectRatio = 2;
 
   // Focus indicator
   static const double tvFocusBorderWidth = 4.0;
@@ -37,4 +37,3 @@ class TvConstants {
   // Safe area padding for TV
   static const double tvSafeAreaPadding = 48.0;
 }
-

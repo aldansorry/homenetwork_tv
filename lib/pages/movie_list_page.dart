@@ -53,30 +53,39 @@ class _MovieListPageState extends State<MovieListPage> {
   }
 
   void _handleKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent && _movieSeriesList.isNotEmpty) {
-      switch (event.logicalKey) {
-        case LogicalKeyboardKey.arrowDown:
-          if (_focusedIndex < _movieSeriesList.length - 1) {
-            setState(() {
-              _focusedIndex++;
-            });
-            _focusNodes[_focusedIndex].requestFocus();
-          }
-          break;
-        case LogicalKeyboardKey.arrowUp:
-          if (_focusedIndex > 0) {
-            setState(() {
-              _focusedIndex--;
-            });
-            _focusNodes[_focusedIndex].requestFocus();
-          }
-          break;
-        case LogicalKeyboardKey.select:
-        case LogicalKeyboardKey.enter:
-          _navigateToMoviePage(_movieSeriesList[_focusedIndex].uuid);
-          break;
-        default:
-          break;
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.escape ||
+          event.logicalKey == LogicalKeyboardKey.goBack ||
+          event.logicalKey == LogicalKeyboardKey.browserBack ||
+          event.logicalKey == LogicalKeyboardKey.backspace) {
+        Navigator.pop(context);
+        return;
+      }
+      if (_movieSeriesList.isNotEmpty) {
+        switch (event.logicalKey) {
+          case LogicalKeyboardKey.arrowDown:
+            if (_focusedIndex < _movieSeriesList.length - 1) {
+              setState(() {
+                _focusedIndex++;
+              });
+              _focusNodes[_focusedIndex].requestFocus();
+            }
+            break;
+          case LogicalKeyboardKey.arrowUp:
+            if (_focusedIndex > 0) {
+              setState(() {
+                _focusedIndex--;
+              });
+              _focusNodes[_focusedIndex].requestFocus();
+            }
+            break;
+          case LogicalKeyboardKey.select:
+          case LogicalKeyboardKey.enter:
+            _navigateToMoviePage(_movieSeriesList[_focusedIndex].uuid);
+            break;
+          default:
+            break;
+        }
       }
     }
   }
@@ -177,13 +186,38 @@ class _MovieListPageState extends State<MovieListPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'Movie Series',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: TvConstants.tvFontSizeTitle,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            // Tombol Home
+            TvFocusableWidget(
+              onTap: () {
+                Navigator.pop(context); // kembali ke halaman sebelumnya (Home)
+              },
+              child: Container(
+                padding: const EdgeInsets.all(TvConstants.tvSpacingSmall),
+                decoration: BoxDecoration(
+                  color: Color(TvConstants.tvFocusColor).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.home,
+                  color: Colors.white,
+                  size: TvConstants.tvIconSizeLarge,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            // Judul Movie Series
+            const Text(
+              'Movie Series',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: TvConstants.tvFontSizeTitle,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
         TvFocusableWidget(
           onTap: _loadMovieSeries,
