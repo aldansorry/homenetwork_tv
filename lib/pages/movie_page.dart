@@ -570,6 +570,7 @@ class _MoviePageState extends State<MoviePage> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
+                                    // PLAY / PAUSE
                                     _buildControlButton(
                                       icon: _isVideoPlaying
                                           ? Icons.pause
@@ -579,7 +580,9 @@ class _MoviePageState extends State<MoviePage> {
                                         _togglePlayPause();
                                       },
                                     ),
-                                    const SizedBox(width: 16),
+                                    const SizedBox(width: 20),
+
+                                    // NEXT
                                     _buildControlButton(
                                       icon: Icons.skip_next,
                                       onTap: () {
@@ -587,15 +590,97 @@ class _MoviePageState extends State<MoviePage> {
                                         _playNextVideo();
                                       },
                                     ),
-                                    const SizedBox(width: 16),
+                                    const SizedBox(width: 20),
+
+                                    // FULLSCREEN EXIT
                                     _buildControlButton(
-                                      icon: _isFullscreen
-                                          ? Icons.fullscreen_exit
-                                          : Icons.fullscreen,
+                                      icon: Icons.fullscreen_exit,
                                       onTap: () {
                                         _showFullscreenControlsAndReset();
                                         _toggleFullscreen();
                                       },
+                                    ),
+                                    const SizedBox(width: 30),
+
+                                    // VOLUME DOWN
+                                    const Icon(
+                                      Icons.volume_down,
+                                      color: Colors.white70,
+                                      size: 22,
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // SLIDER
+                                    SizedBox(
+                                      width: 200,
+                                      child: SliderTheme(
+                                        data: SliderThemeData(
+                                          trackHeight: 3.0,
+                                          thumbShape:
+                                              const RoundSliderThumbShape(
+                                                enabledThumbRadius: 6,
+                                              ),
+                                          activeTrackColor: Color(
+                                            AppConstants.colorPrimaryRed,
+                                          ),
+                                          inactiveTrackColor: Colors.white24,
+                                          thumbColor: Color(
+                                            AppConstants.colorPrimaryRed,
+                                          ),
+                                        ),
+                                        child: Slider(
+                                          value: _volumeLevel,
+                                          min: 0.0,
+                                          max: 1.0,
+                                          onChanged: (v) {
+                                            _updateVolume(v);
+                                            _showFullscreenControlsAndReset();
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // VOLUME UP
+                                    const Icon(
+                                      Icons.volume_up,
+                                      color: Colors.white70,
+                                      size: 22,
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // VOLUME %
+                                    Text(
+                                      "${(_volumeLevel * 100).toStringAsFixed(0)}%",
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+
+                                    // AUTO PLAY SWITCH
+                                    Row(
+                                      children: [
+                                        const Text(
+                                          'Auto Play',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Switch(
+                                          value: _isAutoPlayEnabled,
+                                          onChanged: (_) {
+                                            _toggleAutoPlay();
+                                            _showFullscreenControlsAndReset();
+                                          },
+                                          activeColor: const Color(
+                                            AppConstants.colorPrimaryRed,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
