@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
 import 'pages/main_menu.dart';
 import 'constants/tv_constants.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   // Enable TV mode
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  
   runApp(const HomeNetworkApp());
 }
 

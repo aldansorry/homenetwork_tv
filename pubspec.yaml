@@ -18,6 +18,9 @@ dependencies:
   idb_shim: ^2.2.0
   video_player: ^2.8.2
   shared_preferences: ^2.2.2
+  media_kit: ^1.1.0
+  media_kit_video: ^1.1.0
+  media_kit_libs_video: ^1.0.7
 
 dev_dependencies:
   flutter_test:
