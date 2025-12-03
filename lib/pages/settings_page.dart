@@ -7,6 +7,7 @@ import '../constants/tv_constants.dart';
 import '../utils/url_validator.dart';
 import '../widgets/tv_button.dart';
 import '../widgets/tv_focusable_widget.dart';
+import 'webview_page.dart';
 
 /// Settings page for configuring application settings
 class SettingsPage extends StatefulWidget {
@@ -174,11 +175,35 @@ class _SettingsPageState extends State<SettingsPage> {
                 _buildYouTubeDownloaderSection(),
                 const SizedBox(height: TvConstants.tvSpacingLarge),
                 _buildStatusMessage(),
+                _buildWebviewButton(), // ← tombol baru di sini
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildWebviewButton() {
+    return TvButton(
+      label: 'Open Web Interface',
+      icon: Icons.web,
+      onPressed: () async {
+        final backend = await SettingsService.getBackendUrl();
+
+        // Hapus protocol dan port
+        final uri = Uri.parse(backend);
+        final domainOnly = uri.host; // Contoh: 192.168.1.10 atau example.com
+
+        // Buat URL final tanpa port → otomatis port 80
+        final webUrl = "${uri.scheme}://$domainOnly";
+
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => WebviewPage(url: webUrl)),
+        );
+      },
     );
   }
 

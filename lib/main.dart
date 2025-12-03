@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'pages/main_menu.dart';
 import 'constants/tv_constants.dart';
-
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   // Enable TV mode
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-
+  WebViewPlatform.instance ??= AndroidWebViewPlatform();
   
   runApp(const HomeNetworkApp());
 }
